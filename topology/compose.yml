@@ -1,0 +1,19 @@
+# Live 2.5D topology dashboard. Read-only. Joins minikube's docker network so it
+# can reach the K8s API; `make topo-up` writes the token/CA/IP it needs.
+name: sparkflock-topology
+services:
+  topology:
+    build: .
+    container_name: sparkflock-topology
+    ports: ["29090:8090"]
+    environment:
+      K8S_API: https://${MINIKUBE_IP}:8443
+      K8S_NAMESPACE: spark
+      STANDALONE_MASTER_UI: http://host.docker.internal:28080
+      PROBES: "minio=host.docker.internal:29000,postgres=host.docker.internal:25432"
+    volumes: ["../.spark/topology:/creds:ro"]
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    networks: [minikube]
+    restart: unless-stopped
+networks:
+  minikube: { external: true, name: sparkflock }

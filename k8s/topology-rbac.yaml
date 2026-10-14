@@ -1,0 +1,28 @@
+# Read-only identity for the topology dashboard container. It can LIST pods and
+# configmaps in the spark namespace and nothing else (no create/delete/exec).
+apiVersion: v1
+kind: ServiceAccount
+metadata: { name: topology, namespace: spark }
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: { name: topology-reader, namespace: spark }
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "configmaps"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: { name: topology-reader, namespace: spark }
+subjects:
+  - { kind: ServiceAccount, name: topology, namespace: spark }
+roleRef: { kind: Role, name: topology-reader, apiGroup: rbac.authorization.k8s.io }
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: topology-token
+  namespace: spark
+  annotations: { kubernetes.io/service-account.name: topology }
+type: kubernetes.io/service-account-token

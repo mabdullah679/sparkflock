@@ -1,0 +1,364 @@
+<title>Sparkflock</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column, code excerpts as the primary evidence, charts only where numbers were measured. */
+:root{
+  --bg:#f4f6f8; --surface:#ffffff; --ink:#0f1b26; --ink2:#4a5866; --ink3:#7a8794; --rule:#d9dfe5;
+  --s1:#2a78d6; --s2:#eb6834; --neutral:#9aa6b2; --good:#0c8a0c; --warn:#b36b00; --bad:#c23a39;
+  --codebg:#0f1b26; --codeink:#e6edf3; --codeln:#6f7f8f; --refbg:#e6eef9; --refink:#184f95;
+  --display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --body:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#10161c; --surface:#18212a; --ink:#eef2f6; --ink2:#b4c0cb; --ink3:#8a97a3; --rule:#2c3946;
+  --s1:#3987e5; --s2:#d95926; --neutral:#6b7886; --good:#3fbf3f; --warn:#e0a030; --bad:#e66767;
+  --codebg:#0b1015; --codeln:#5d6b79; --refbg:#1f2f45; --refink:#9ec5f4; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#10161c; --surface:#18212a; --ink:#eef2f6; --ink2:#b4c0cb; --ink3:#8a97a3; --rule:#2c3946;
+  --s1:#3987e5; --s2:#d95926; --neutral:#6b7886; --good:#3fbf3f; --warn:#e0a030; --bad:#e66767;
+  --codebg:#0b1015; --codeln:#5d6b79; --refbg:#1f2f45; --refink:#9ec5f4; color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font:16px/1.6 var(--body);padding-inline:16px;padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;line-height:1.15;margin:0}
+h1{font-size:clamp(40px,7vw,68px);font-weight:700;letter-spacing:-.02em}
+h2{font-size:clamp(26px,3.6vw,34px);font-weight:700;margin-top:72px;padding-top:24px;border-top:1px solid var(--rule)}
+h3{font-size:19px;font-weight:700;margin-top:32px}
+p{max-width:68ch;margin:12px 0}
+code{font-family:var(--mono);font-size:.88em}
+nav{position:sticky;top:env(safe-area-inset-top,0px);background:var(--bg);border-bottom:1px solid var(--rule);
+  display:flex;gap:20px;overflow-x:auto;padding:12px 0;margin-bottom:8px;font-size:14px;z-index:2}
+nav a{color:var(--ink2);text-decoration:none;white-space:nowrap}
+nav a:hover,nav a:focus-visible{color:var(--ink);text-decoration:underline}
+.lede{font-size:20px;color:var(--ink2);max-width:60ch;margin-top:16px}
+.eyebrow{font:500 12px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-top:56px}
+.ref{font:500 12.5px var(--mono);background:var(--refbg);color:var(--refink);padding:2px 7px;border-radius:4px;white-space:nowrap}
+.scroll{overflow-x:auto;margin:16px 0}
+table{border-collapse:collapse;width:100%;min-width:640px;font-size:15px}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--rule);vertical-align:top}
+th{font:500 12px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+td.num,th.num{font-variant-numeric:tabular-nums;text-align:right}
+.tag{font:500 12px var(--mono);padding:2px 8px;border-radius:999px;border:1px solid currentColor;white-space:nowrap}
+.tag.good{color:var(--good)} .tag.warn{color:var(--warn)} .tag.bad{color:var(--bad)}
+figure.code{margin:16px 0;border-radius:8px;overflow:hidden;background:var(--codebg)}
+figure.code figcaption{padding:8px 14px;border-bottom:1px solid #243242}
+figure.code .ref{background:transparent;color:#9ec5f4;padding:0}
+figure.code pre{margin:0;padding:12px 0;overflow-x:auto;color:var(--codeink);font:13px/1.55 var(--mono);tab-size:4}
+figure.code code{display:block;min-width:max-content;padding-right:16px}
+.ln{display:inline-block;width:3.2em;padding-right:1em;text-align:right;color:var(--codeln);user-select:none}
+.note{margin:0;padding:10px 14px;font-size:14px;color:var(--codeln);border-top:1px solid #243242;background:var(--codebg);color:#9fb0c0}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:20px}
+.two>*{min-width:0}
+.panel{background:var(--surface);border:1px solid var(--rule);border-radius:8px;padding:16px 18px}
+.panel h3{margin-top:0}
+.chart{background:var(--surface);border:1px solid var(--rule);border-radius:8px;padding:16px;margin:20px 0}
+.chart svg{width:100%;height:auto;display:block}
+.chart text{fill:var(--ink2);font:12px var(--body)}
+.chart .lab{fill:var(--ink);font-weight:600}
+.chart .grid{stroke:var(--rule);stroke-width:1}
+.legend{display:flex;gap:18px;flex-wrap:wrap;font-size:14px;color:var(--ink2);margin-bottom:8px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+details{margin-top:12px;font-size:14px;color:var(--ink2)}
+summary{cursor:pointer}
+.big{font:700 44px var(--display);font-variant-numeric:tabular-nums;line-height:1}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:20px;margin:28px 0 0}
+.kpis div span{display:block;font-size:14px;color:var(--ink2);margin-top:6px}
+ul.tight{padding-left:20px;margin:8px 0} ul.tight li{margin:4px 0}
+.cmd{font:14px/1.7 var(--mono);background:var(--surface);border:1px solid var(--rule);border-radius:8px;padding:14px 16px;overflow-x:auto;white-space:pre}
+@media (prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
+</style>
+
+<div class="wrap">
+<nav><a href="#answers">Your questions</a><a href="#flow">How a file becomes rows</a><a href="#safe">Bad data and replays</a><a href="#scale">Scaling</a><a href="#iac">Terraform</a><a href="#proof">Proof</a><a href="#gaps">Not proven</a><a href="#run">Run it</a></nav>
+
+<p class="eyebrow">MinIO &rarr; Spark &rarr; Postgres &middot; minikube &middot; Terraform</p>
+<h1>Sparkflock</h1>
+<p class="lede">Drop a JSON file in a bucket and its messages are rows in a database about ten seconds later, with nobody running anything. This page shows what was built, how, and the exact file and line behind each claim.</p>
+<div class="kpis">
+  <div><div class="big">9&ndash;10 s</div><span>upload to row, measured, 5 s poll</span></div>
+  <div><div class="big">600,000</div><span>rows in one 81 MB file, every run</span></div>
+  <div><div class="big">1&rarr;4</div><span>executor pods in about 4 s, back to 1 when idle</span></div>
+  <div><div class="big">16 + 6</div><span>end-to-end checks + K8s checks per run, all passing</span></div>
+</div>
+
+<h2 id="answers">Your questions, answered with measurements</h2>
+<div class="scroll"><table>
+<thead><tr><th>Question</th><th>Answer</th><th>Evidence</th></tr></thead>
+<tbody>
+<tr><td>Does Spark read from MinIO into the database automatically?</td><td><span class="tag good">Yes, while the job runs</span><br>Spark has no S3 event hook, so it polls the prefix. If the job is down, files wait and it catches up when started.</td><td><span class="ref">spark/job.py:269</span><br>9&ndash;10 s upload-to-row, <code>tests/e2e.sh</code> stage 1</td></tr>
+<tr><td>Bigger file: does the Spark master add workers?</td><td><span class="tag bad">No</span><br>With 1 worker running, an 81 MB file used exactly 1 executor and the master stayed at 1 worker. Workers are what you start.</td><td><code>scripts/standalone.sh:20-23</code><br><code>tests/e2e.sh</code> stage 4</td></tr>
+<tr><td>So how does scaling really work?</td><td><span class="tag good">On Kubernetes, yes</span><br>Dynamic allocation: the driver asks the K8s API for executor pods when tasks queue, and returns them after the idle timeout.</td><td><code>k8s/submit.sh:30-38</code><br><code>tests/k8s_scale.sh</code></td></tr>
+<tr><td>Can we configure it?</td><td><span class="tag good">Yes</span> floor <span class="ref">k8s/submit.sh:33</span>, ceiling <span class="ref">k8s/submit.sh:35</span>, idle timeout <span class="ref">k8s/submit.sh:36</span>, piece size <span class="ref">spark/job.py:109</span>.</td><td>Ceiling 4 gave 4 pods, ceiling 2 gave 2, same file.</td></tr>
+<tr><td>Will more workers make it faster?</td><td><span class="tag warn">Not here</span><br>On this file 4.1 of 7.4 s is the Postgres merge, one connection that no executor can share.</td><td><span class="ref">spark/job.py:252</span><br>17&ndash;23 s at ceiling 4, 18&ndash;19 s at ceiling 2</td></tr>
+</tbody></table></div>
+
+<h2 id="flow">How a file becomes rows</h2>
+<div class="chart">
+<svg viewBox="0 0 900 250" role="img" aria-label="Flow: upload to MinIO bucket, Spark driver polls and plans, executors parse, Postgres stage table then merge into events. Kubernetes API creates executor pods.">
+  <defs><marker id="ah" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="var(--ink3)"/></marker></defs>
+  <g fill="none" stroke="var(--ink3)" stroke-width="1.5">
+    <line x1="150" y1="70" x2="206" y2="70" marker-end="url(#ah)"/>
+    <line x1="366" y1="70" x2="426" y2="70" marker-end="url(#ah)"/>
+    <line x1="586" y1="70" x2="646" y2="70" marker-end="url(#ah)"/>
+    <line x1="506" y1="100" x2="506" y2="150" marker-end="url(#ah)" stroke-dasharray="4 4"/>
+  </g>
+  <g>
+    <rect x="10" y="40" width="140" height="60" rx="6" fill="var(--surface)" stroke="var(--rule)"/>
+    <text x="80" y="66" text-anchor="middle" class="lab">You upload</text><text x="80" y="84" text-anchor="middle">a JSON file</text>
+    <rect x="210" y="40" width="156" height="60" rx="6" fill="var(--surface)" stroke="var(--s1)" stroke-width="2"/>
+    <text x="288" y="66" text-anchor="middle" class="lab">MinIO bucket</text><text x="288" y="84" text-anchor="middle">incoming/ (S3 on AWS)</text>
+    <rect x="430" y="40" width="156" height="60" rx="6" fill="var(--surface)" stroke="var(--s1)" stroke-width="2"/>
+    <text x="508" y="66" text-anchor="middle" class="lab">Spark job</text><text x="508" y="84" text-anchor="middle">parse, route, write</text>
+    <rect x="650" y="40" width="190" height="60" rx="6" fill="var(--surface)" stroke="var(--s1)" stroke-width="2"/>
+    <text x="745" y="66" text-anchor="middle" class="lab">Postgres (RDS on AWS)</text><text x="745" y="84" text-anchor="middle">events, events_rejects</text>
+    <rect x="410" y="154" width="192" height="56" rx="6" fill="var(--surface)" stroke="var(--s2)" stroke-width="2"/>
+    <text x="506" y="178" text-anchor="middle" class="lab">Executors 1..N</text><text x="506" y="196" text-anchor="middle">workers or K8s pods</text>
+    <text x="288" y="130" text-anchor="middle">checkpoint saved here too</text>
+    <text x="745" y="130" text-anchor="middle">stage table, then</text><text x="745" y="146" text-anchor="middle">INSERT ... ON CONFLICT DO NOTHING</text>
+  </g>
+</svg>
+</div>
+<h3>1. Read the folder like a stream</h3>
+<p>The job is a Structured Streaming query over the bucket prefix. Each trigger it lists new files, plans them, and hands each batch to one function.</p>
+<figure class="code"><figcaption><span class="ref">spark/job.py:29-37</span></figcaption><pre><code><span class="ln">29</span>EVENT_SCHEMA = StructType([
+<span class="ln">30</span>    StructField(&quot;event_id&quot;, StringType()),
+<span class="ln">31</span>    StructField(&quot;user_id&quot;, LongType()),
+<span class="ln">32</span>    StructField(&quot;event_type&quot;, StringType()),
+<span class="ln">33</span>    StructField(&quot;amount&quot;, DoubleType()),
+<span class="ln">34</span>    StructField(&quot;ts&quot;, TimestampType()),
+<span class="ln">35</span>    StructField(CORRUPT, StringType()),
+<span class="ln">36</span>])
+<span class="ln">37</span>EVENT_COLS = [&quot;event_id&quot;, &quot;user_id&quot;, &quot;event_type&quot;, &quot;amount&quot;, &quot;ts&quot;]
+</code></pre><p class="note">A streaming file source needs an explicit schema. <code>_corrupt_record</code> is what lets a bad line become data instead of a crash.</p></figure>
+<figure class="code"><figcaption><span class="ref">spark/job.py:269-274</span></figcaption><pre><code><span class="ln">269</span>    stream = (spark.readStream.schema(EVENT_SCHEMA)
+<span class="ln">270</span>              .option(&quot;mode&quot;, &quot;PERMISSIVE&quot;)
+<span class="ln">271</span>              .option(&quot;columnNameOfCorruptRecord&quot;, CORRUPT)
+<span class="ln">272</span>              .option(&quot;maxFilesPerTrigger&quot;, cfg.max_files_per_trigger)
+<span class="ln">273</span>              .json(cfg.input_path)
+<span class="ln">274</span>              .withColumn(&quot;source_file&quot;, F.input_file_name()))
+</code></pre><p class="note">Spark has no S3 event hook. It lists this prefix on every trigger and remembers what it has seen in the checkpoint.</p></figure>
+<figure class="code"><figcaption><span class="ref">spark/job.py:278-281</span></figcaption><pre><code><span class="ln">278</span>              .foreachBatch(make_batch_handler(spark, cfg, stats))
+<span class="ln">279</span>              .option(&quot;checkpointLocation&quot;, cfg.checkpoint_path))
+<span class="ln">280</span>    writer = (writer.trigger(availableNow=True) if args.mode == &quot;once&quot;
+<span class="ln">281</span>              else writer.trigger(processingTime=f&quot;{cfg.trigger_seconds} seconds&quot;))
+</code></pre><p class="note"><code>stream</code> mode polls every <code>TRIGGER_SECONDS</code>; <code>once</code> drains what is pending and exits.</p></figure>
+<h3>2. S3 has no folders</h3>
+<figure class="code"><figcaption><span class="ref">spark/job.py:157-164</span></figcaption><pre><code><span class="ln">157</span>def ensure_input_prefix(spark: SparkSession, cfg: Config) -&gt; None:
+<span class="ln">158</span>    &quot;&quot;&quot;S3 has no folders: an empty prefix does not exist, and Spark&#x27;s file
+<span class="ln">159</span>    stream refuses to start on a missing path. Create the marker object.&quot;&quot;&quot;
+<span class="ln">160</span>    jvm = spark._sc._gateway.jvm  # noqa: SLF001
+<span class="ln">161</span>    path = jvm.org.apache.hadoop.fs.Path(cfg.input_path)
+<span class="ln">162</span>    fs = path.getFileSystem(spark.sparkContext._jsc.hadoopConfiguration())  # noqa: SLF001
+<span class="ln">163</span>    if not fs.exists(path):
+<span class="ln">164</span>        fs.mkdirs(path)
+</code></pre><p class="note">Found by running it: S3 has no folders, an empty prefix does not exist, and the stream refused to start.</p></figure>
+<h3>3. The same code runs locally and on AWS</h3>
+<p>Endpoint, keys and database host come from environment variables. With <code>S3_ENDPOINT</code> empty the job uses real S3 and the AWS credential chain. Checkpoint progress lives in the bucket (<span class="ref">spark/job.py:279</span>), so a restarted driver resumes where it stopped.</p>
+
+<h2 id="safe">Bad data and replays</h2>
+<p>These guards exist because uploads are messy. Each one was broken on purpose and the test went red (see Proof).</p>
+<h3>Replays never duplicate</h3>
+<p>The same <code>event_id</code> uploaded twice, in any file name, leaves one row. The key is a primary key and the merge skips conflicts (<span class="ref">spark/job.py:50</span>).</p>
+<figure class="code"><figcaption><span class="ref">spark/job.py:47-51</span></figcaption><pre><code><span class="ln">47</span>MERGE_EVENTS_SQL = &quot;&quot;&quot;
+<span class="ln">48</span>INSERT INTO events (event_id, user_id, event_type, amount, ts, source_file)
+<span class="ln">49</span>SELECT event_id, user_id, event_type, amount, ts, source_file FROM events_stage
+<span class="ln">50</span>ON CONFLICT (event_id) DO NOTHING
+<span class="ln">51</span>&quot;&quot;&quot;
+</code></pre><p class="note">Spark's JDBC writer can only append or overwrite. It writes a stage table, then this runs on one connection.</p></figure>
+<h3>Broken lines are quarantined, not fatal</h3>
+<figure class="code"><figcaption><span class="ref">spark/job.py:224-232</span></figcaption><pre><code><span class="ln">224</span>            is_bad = F.col(CORRUPT).isNotNull() | F.col(&quot;event_id&quot;).isNull()
+<span class="ln">225</span>
+<span class="ln">226</span>            good = work.filter(~is_bad).select(*EVENT_COLS, &quot;source_file&quot;)
+<span class="ln">227</span>            raw = F.coalesce(F.col(CORRUPT), F.to_json(F.struct(*EVENT_COLS)))
+<span class="ln">228</span>            bad = (work.filter(is_bad).select(
+<span class="ln">229</span>                F.md5(F.concat_ws(&quot;|&quot;, F.col(&quot;source_file&quot;), raw)).alias(&quot;reject_key&quot;),
+<span class="ln">230</span>                raw.alias(&quot;raw&quot;), &quot;source_file&quot;,
+<span class="ln">231</span>                F.when(F.col(CORRUPT).isNotNull(), &quot;unparseable_json&quot;)
+<span class="ln">232</span>                 .otherwise(&quot;missing_event_id&quot;).alias(&quot;reason&quot;)))
+</code></pre><p class="note">Anything unparseable, or without an <code>event_id</code>, goes to <code>events_rejects</code> with a reason.</p></figure>
+<h3>A pretty-printed message is still one message</h3>
+<p>Saving one message as indented JSON is the normal way people make a file, and it is the case you asked about. Line by line it looks like seven broken records. The first version of this pipeline rejected it. The fix below re-reads only failing files, whole.</p>
+<figure class="code"><figcaption><span class="ref">spark/job.py:187-199</span></figcaption><pre><code><span class="ln">187</span>    texts = (spark.read.text(files, wholetext=True)  # the kwarg, not .option(): .text() resets it
+<span class="ln">188</span>             .select(F.input_file_name().alias(&quot;source_file&quot;), F.col(&quot;value&quot;))
+<span class="ln">189</span>             .filter(F.length(&quot;value&quot;) &lt;= MAX_RECOVER_BYTES).collect())
+<span class="ln">190</span>    clean, items = [], []
+<span class="ln">191</span>    for row in texts:
+<span class="ln">192</span>        try:
+<span class="ln">193</span>            doc = json.loads(row.value)
+<span class="ln">194</span>        except ValueError:
+<span class="ln">195</span>            continue
+<span class="ln">196</span>        docs = doc if isinstance(doc, list) else [doc]
+<span class="ln">197</span>        if not docs or not all(isinstance(d, dict) for d in docs):
+<span class="ln">198</span>            continue
+<span class="ln">199</span>        clean.append(row.source_file)
+</code></pre><p class="note">A pretty-printed message arrives as fragments. Only the failing files are re-read whole, and accepted only if the entire text is one valid JSON object or array.</p></figure>
+
+<h2 id="scale">Scaling</h2>
+<h3>Spark standalone on the Mac: you add workers, Spark does not</h3>
+<figure class="code"><figcaption><span class="ref">scripts/standalone.sh:20-23</span></figcaption><pre><code><span class="ln">20</span>    for i in $(seq 1 &quot;$n&quot;); do
+<span class="ln">21</span>      start &quot;worker$i&quot; &quot;$CLASS&quot; org.apache.spark.deploy.worker.Worker \
+<span class="ln">22</span>        --host &quot;$SA_MASTER_HOST&quot; --port $((27100 + i)) --webui-port $((28080 + i)) \
+<span class="ln">23</span>        --cores 2 --memory 2g --work-dir &quot;$RUN/work$i&quot; &quot;spark://$SA_MASTER_HOST:$SA_MASTER_PORT&quot;
+</code></pre><p class="note">Workers exist because this loop started them. Nothing in Spark's standalone master creates one.</p></figure>
+<div class="scroll"><table>
+<thead><tr><th>Setup</th><th class="num">Workers alive</th><th class="num">Executors used</th><th class="num">Input pieces</th><th class="num">Batch seconds</th></tr></thead>
+<tbody>
+<tr><td>1 worker, 81 MB file</td><td class="num">1</td><td class="num">1</td><td class="num">9</td><td class="num">11.1</td></tr>
+<tr><td>2 workers started by hand, fresh 81 MB file</td><td class="num">2</td><td class="num">2</td><td class="num">9</td><td class="num">12.3</td></tr>
+</tbody></table></div>
+<p>A bigger file only becomes more pieces (<span class="ref">spark/job.py:109</span>). The pieces are shared across whatever workers exist.</p>
+<figure class="code"><figcaption><span class="ref">spark/job.py:107-109</span></figcaption><pre><code><span class="ln">107</span>def build_spark(cfg: Config) -&gt; SparkSession:
+<span class="ln">108</span>    b = (SparkSession.builder.appName(&quot;sparkflock-ingest&quot;)
+<span class="ln">109</span>         .config(&quot;spark.sql.files.maxPartitionBytes&quot;, cfg.max_partition_mb * 1024 * 1024)
+</code></pre><p class="note">A big file is cut into pieces of this size. Pieces are the unit of parallelism.</p></figure>
+
+<h3>Spark on minikube: executor pods follow the queue</h3>
+<figure class="code"><figcaption><span class="ref">k8s/submit.sh:30-38</span></figcaption><pre><code><span class="ln">30</span>  --conf spark.dynamicAllocation.enabled=true \
+<span class="ln">31</span>  --conf spark.dynamicAllocation.shuffleTracking.enabled=true \
+<span class="ln">32</span>  --conf spark.dynamicAllocation.shuffleTracking.timeout=30s \
+<span class="ln">33</span>  --conf spark.dynamicAllocation.minExecutors=&quot;$MIN&quot; \
+<span class="ln">34</span>  --conf spark.dynamicAllocation.initialExecutors=&quot;$MIN&quot; \
+<span class="ln">35</span>  --conf spark.dynamicAllocation.maxExecutors=&quot;$MAX&quot; \
+<span class="ln">36</span>  --conf spark.dynamicAllocation.executorIdleTimeout=&quot;$IDLE&quot; \
+<span class="ln">37</span>  --conf spark.dynamicAllocation.schedulerBacklogTimeout=1s \
+<span class="ln">38</span>  --conf spark.dynamicAllocation.sustainedSchedulerBacklogTimeout=1s \
+</code></pre><p class="note">These are the scaling controls. Min, max and idle timeout are the three you will actually change.</p></figure>
+<figure class="code"><figcaption><span class="ref">k8s/rbac.yaml:11-17</span></figcaption><pre><code><span class="ln">11</span>apiVersion: rbac.authorization.k8s.io/v1
+<span class="ln">12</span>kind: Role
+<span class="ln">13</span>metadata: { name: spark-executor-manager, namespace: spark }
+<span class="ln">14</span>rules:
+<span class="ln">15</span>  - apiGroups: [&quot;&quot;]
+<span class="ln">16</span>    resources: [&quot;pods&quot;, &quot;services&quot;, &quot;configmaps&quot;, &quot;persistentvolumeclaims&quot;]
+<span class="ln">17</span>    verbs: [&quot;create&quot;, &quot;get&quot;, &quot;list&quot;, &quot;watch&quot;, &quot;delete&quot;, &quot;deletecollection&quot;, &quot;patch&quot;]
+</code></pre><p class="note">Scaling on Kubernetes is physically the driver creating and deleting pods. Without this Role it cannot.</p></figure>
+<div class="chart">
+  <div class="legend"><span><i style="background:var(--s1)"></i>Ceiling 4</span><span><i style="background:var(--s2)"></i>Ceiling 2</span><span>Same 81 MB file, uploaded at 0 s</span></div>
+  <svg viewBox="0 0 640 270" role="img" aria-label="Executor pod count over time. Ceiling 4: 1 pod, 4 pods at 4 seconds, 2 at 35 seconds, 1 at 54 seconds. Ceiling 2: 1 pod, 2 pods at 4 seconds, 1 at 50 seconds.">
+    <g class="grid">
+      <line x1="40" x2="590" y1="224" y2="224"/><line x1="40" x2="590" y1="184" y2="184"/><line x1="40" x2="590" y1="144" y2="144"/>
+      <line x1="40" x2="590" y1="104" y2="104"/><line x1="40" x2="590" y1="64" y2="64"/><line x1="40" x2="590" y1="24" y2="24"/>
+    </g>
+    <text x="30" y="228" text-anchor="end">0</text><text x="30" y="188" text-anchor="end">1</text><text x="30" y="148" text-anchor="end">2</text>
+    <text x="30" y="108" text-anchor="end">3</text><text x="30" y="68" text-anchor="end">4</text><text x="30" y="28" text-anchor="end">5</text>
+    <text x="40" y="244" text-anchor="middle">0 s</text><text x="210" y="244" text-anchor="middle">20 s</text>
+    <text x="380" y="244" text-anchor="middle">40 s</text><text x="550" y="244" text-anchor="middle">60 s</text>
+    <text x="315" y="262" text-anchor="middle">seconds since upload &middot; y: executor pods</text>
+    <path d="M40 184H74V64H337V144H499V184H590" fill="none" stroke="var(--s1)" stroke-width="2.5" stroke-linejoin="round"/>
+    <path d="M40 184H74V144H465V184H590" fill="none" stroke="var(--s2)" stroke-width="2.5" stroke-linejoin="round" stroke-dasharray="7 4"/>
+    <circle cx="74" cy="64" r="4.5" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
+    <circle cx="74" cy="144" r="4.5" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
+    <text class="lab" x="140" y="55">Ceiling 4: 4 pods at 4 s</text>
+    <text class="lab" x="140" y="136">Ceiling 2: 2 pods at 4 s</text>
+    <text x="345" y="160">scale-down 20&ndash;30 s after the work ends</text>
+  </svg>
+  <details><summary>Table view</summary>
+  <div class="scroll"><table><thead><tr><th>Ceiling</th><th class="num">At 0 s</th><th class="num">Peak</th><th>Peak reached</th><th>Back to 1</th></tr></thead>
+  <tbody><tr><td>4</td><td class="num">1</td><td class="num">4</td><td>4 s</td><td>54 s (via 2 at 35 s)</td></tr>
+  <tr><td>2</td><td class="num">1</td><td class="num">2</td><td>4 s</td><td>50 s</td></tr></tbody></table></div></details>
+</div>
+
+<h3>Where the time actually goes</h3>
+<p>One 81 MB batch took 7.4 s. Changing JDBC connections from 1 to 8 moved it from 7.3 to 7.5 s, so connection count is not the limit. The merge runs inside Postgres on one connection, so no number of executors can speed it up.</p>
+<figure class="code"><figcaption><span class="ref">spark/job.py:147-149</span></figcaption><pre><code><span class="ln">147</span>def write_stage(df: DataFrame, cfg: Config, table: str) -&gt; None:
+<span class="ln">148</span>    (df.coalesce(cfg.jdbc_partitions)  # at most N concurrent connections to the DB
+<span class="ln">149</span>       .write.format(&quot;jdbc&quot;)
+</code></pre><p class="note">Scaling executors must not scale database connections. This caps them.</p></figure>
+<div class="chart">
+  <div class="legend"><span><i style="background:var(--s1)"></i>Spark writes stage table 1.4 s</span><span><i style="background:var(--s2)"></i>Postgres merge 4.1 s</span><span><i style="background:var(--neutral)"></i>Read, count, rejects (remainder) 1.9 s</span></div>
+  <svg viewBox="0 0 640 70" role="img" aria-label="Stacked bar of 7.4 seconds: 1.4 stage write, 4.1 Postgres merge, 1.9 remainder">
+    <rect x="0" y="12" width="104" height="38" rx="3" fill="var(--s1)"/>
+    <rect x="106" y="12" width="310" height="38" rx="3" fill="var(--s2)"/>
+    <rect x="418" y="12" width="142" height="38" rx="3" fill="var(--neutral)"/>
+    <text x="52" y="36" text-anchor="middle" fill="#fff" style="fill:#fff;font-weight:600">1.4 s</text>
+    <text x="261" y="36" text-anchor="middle" style="fill:#fff;font-weight:600">4.1 s</text>
+    <text x="489" y="36" text-anchor="middle" style="fill:#fff;font-weight:600">1.9 s</text>
+  </svg>
+</div>
+
+<h2 id="iac">Terraform: one module, two environments</h2>
+<p>Locally the AWS provider talks to MinIO and creates the bucket. In staging the same module also creates a small RDS Postgres. Switching is the provider block and one flag.</p>
+<figure class="code"><figcaption><span class="ref">terraform/envs/local/main.tf:16-25</span></figcaption><pre><code><span class="ln">16</span>  region                      = &quot;us-east-1&quot;
+<span class="ln">17</span>  access_key                  = var.s3_access_key
+<span class="ln">18</span>  secret_key                  = var.s3_secret_key
+<span class="ln">19</span>  s3_use_path_style           = true
+<span class="ln">20</span>  skip_credentials_validation = true
+<span class="ln">21</span>  skip_requesting_account_id  = true
+<span class="ln">22</span>  skip_metadata_api_check     = true
+<span class="ln">23</span>  endpoints {
+<span class="ln">24</span>    s3 = var.s3_endpoint
+<span class="ln">25</span>  }
+</code></pre><p class="note">Same AWS provider, pointed at MinIO. The module that creates the bucket is identical in staging.</p></figure>
+<figure class="code"><figcaption><span class="ref">terraform/modules/pipeline/main.tf:36-49</span></figcaption><pre><code><span class="ln">36</span>resource &quot;aws_db_instance&quot; &quot;this&quot; {
+<span class="ln">37</span>  count                   = var.create_rds ? 1 : 0
+<span class="ln">38</span>  identifier              = &quot;${var.bucket_name}-pg&quot;
+<span class="ln">39</span>  engine                  = &quot;postgres&quot;
+<span class="ln">40</span>  engine_version          = &quot;17&quot;
+<span class="ln">41</span>  instance_class          = var.db_instance_class
+<span class="ln">42</span>  allocated_storage       = 20
+<span class="ln">43</span>  storage_type            = &quot;gp3&quot;
+<span class="ln">44</span>  db_name                 = var.db_name
+<span class="ln">45</span>  username                = var.db_username
+<span class="ln">46</span>  password                = random_password.db[0].result
+<span class="ln">47</span>  vpc_security_group_ids  = [aws_security_group.db[0].id]
+<span class="ln">48</span>  publicly_accessible     = true # staging convenience; pair with a /32 allowed_cidr
+<span class="ln">49</span>  multi_az                = false
+</code></pre><p class="note">Staging only (<code>create_rds = true</code>). Validated, never applied: no AWS credentials were available.</p></figure>
+<figure class="code"><figcaption><span class="ref">terraform/modules/pipeline/variables.tf:28-37</span></figcaption><pre><code><span class="ln">28</span>variable &quot;allowed_cidr&quot; {
+<span class="ln">29</span>  description = &quot;Who may reach Postgres on 5432 (your public IP as x.x.x.x/32). Never 0.0.0.0/0.&quot;
+<span class="ln">30</span>  type        = string
+<span class="ln">31</span>  default     = &quot;&quot;
+<span class="ln">32</span>
+<span class="ln">33</span>  validation {
+<span class="ln">34</span>    condition     = var.allowed_cidr != &quot;0.0.0.0/0&quot;
+<span class="ln">35</span>    error_message = &quot;allowed_cidr must not be 0.0.0.0/0.&quot;
+<span class="ln">36</span>  }
+<span class="ln">37</span>}
+</code></pre></figure>
+<p><span class="tag warn">Not applied</span> Staging passes <code>terraform validate</code> and the <code>0.0.0.0/0</code> guard rejects as intended. It was never planned or applied because this machine has no AWS credentials. RDS was never exercised, so forced SSL and small-instance speed are unobserved.</p>
+
+<h2 id="proof">Proof</h2>
+<p>Each guard was removed on purpose against a passing baseline, and the test had to go red for the right reason. Each edit was then reversed and the file confirmed identical.</p>
+<div class="scroll"><table>
+<thead><tr><th>Guard</th><th>Removed by</th><th>Result</th></tr></thead>
+<tbody>
+<tr><td>Replay safety</td><td>deleting <code>ON CONFLICT DO NOTHING</code></td><td><span class="tag good">red</span> replay check fails</td></tr>
+<tr><td>Bad-record routing</td><td><code>is_bad</code> forced false</td><td><span class="tag good">red</span> 5 checks fail</td></tr>
+<tr><td>Empty-prefix startup</td><td>deleting <code>ensure_input_prefix</code></td><td><span class="tag good">red</span> no row ever arrives</td></tr>
+<tr><td>Pretty-printed recovery</td><td>recovery returns nothing</td><td><span class="tag good">red</span> 8 of 9 rows, 11 rejects</td></tr>
+<tr><td>Whole-file validity check</td><td>accept files that are not wholly valid</td><td><span class="tag good">red</span> 5 checks fail</td></tr>
+<tr><td>K8s executor ceiling</td><td>ceiling hard-coded to 3 with limit 2</td><td><span class="tag good">red</span> peak 3, expected 2</td></tr>
+<tr><td>Standalone worker counts</td><td>(observation, no mutation)</td><td><span class="tag warn">measured only</span></td></tr>
+</tbody></table></div>
+<h3>What broke while building it</h3>
+<ul class="tight">
+<li><b>Packages set in code were ignored</b> under <code>spark-submit</code>; they are now passed on the command line (<figure class="code"><figcaption><span class="ref">scripts/submit.sh:15-16</span></figcaption><pre><code><span class="ln">15</span>exec &quot;$SPARK_HOME/bin/spark-submit&quot; --master &quot;$master&quot; --packages &quot;$PACKAGES&quot; \
+<span class="ln">16</span>  --conf spark.driver.host=127.0.0.1 --conf spark.driver.bindAddress=127.0.0.1 \
+</code></pre></figure>).</li>
+<li><b>Postgres driver invisible</b> to the JVM's driver manager; it is now loaded through Spark's classloader (<span class="ref">spark/job.py:131</span>).</li>
+<li><b>Empty bucket prefix crashed startup.</b> Fixed (see step 2).</li>
+<li><b>The Mac's Python path leaked into the pod</b> and the driver died with <code>error=2</code> (<span class="ref">k8s/submit.sh:19</span>).</li>
+<li><b>Pretty-printed JSON was shredded into rejects.</b> My first fix used Spark's multi-line reader, which silently ingested 1 of 6 rows from a mixed file. That is why recovery now validates the entire file text.</li>
+<li><b><code>.text()</code> silently reset <code>wholetext</code></b>, so the "whole file" read was line by line. Now passed as the keyword argument.</li>
+</ul>
+
+<h2 id="gaps">Not proven</h2>
+<ul class="tight">
+<li>Nothing has run against real S3 or RDS. Local MinIO and Postgres stand in; the code path differs only by environment variables.</li>
+<li>Kubernetes pods talking to real AWS S3 is not built (it needs an AWS identity inside the pods).</li>
+<li>Pretty-printed files over 32 MB stay rejected, and a pretty-printed file of several concatenated objects is rejected rather than guessed at.</li>
+<li>Compressed JSON is not splittable: one file is one task regardless of size.</li>
+</ul>
+
+<h2 id="run">Run it</h2>
+<div class="cmd">make init            # once: Spark into a private venv
+make up              # MinIO + Postgres, bucket created by Terraform
+make cluster-up      # Spark master + 1 worker
+make stream          # always-on job (leave running)
+
+make gen-one && make upload FILE=data/one.json
+make count           # about 10 s later: 1 event
+
+make test            # 16 end-to-end checks, about 6 min
+make k8s-start && make k8s-test MAX=4</div>
+<p>Plain-language guide: <code>README.txt</code>. Agent guide: <code>README.md</code>. Regenerate this page with <code>python3 presentation/build.py</code>; it fails if any referenced line moves.</p>
+</div>

@@ -1,0 +1,2 @@
+bucket_name  = "sparkflock-ingest-CHANGEME-staging"
+allowed_cidr = "203.0.113.7/32"   # your public IP: curl -s ifconfig.me

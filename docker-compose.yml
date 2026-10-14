@@ -1,0 +1,41 @@
+# Local "AWS": MinIO plays S3, Postgres plays RDS.
+# Names/ports are namespaced (sparkflock-*, 29000/29001/25432) so they never
+# collide with other projects on this machine.
+name: sparkflock
+services:
+  minio:
+    image: quay.io/minio/minio:latest
+    container_name: sparkflock-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY}
+    ports:
+      - "29000:9000"   # S3 API
+      - "29001:9001"   # web console
+    volumes: [minio-data:/data]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  postgres:
+    image: postgres:17
+    container_name: sparkflock-postgres
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "25432:5432"
+    volumes: [pg-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  minio-data:
+  pg-data:

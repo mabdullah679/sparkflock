@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sparkflock Topology</title>
+<style>
+  :root{--bg:#0b0f17;--panel:#121927;--line:#243049;--txt:#d7e0f0;--dim:#7d8aa6;
+        --minio:#c8527a;--driver:#f5a524;--exec:#35d6a4;--pg:#4f8cff;--warn:#ff5d5d;--master:#b48cff}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace}
+  #app{display:grid;grid-template-columns:1fr 300px;grid-template-rows:auto 1fr 120px;height:100%}
+  header{grid-column:1/3;display:flex;gap:18px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+  header h1{font-size:14px;margin:0;letter-spacing:.08em}
+  .pill{padding:2px 8px;border-radius:99px;border:1px solid var(--line);color:var(--dim)}
+  .pill.ok{color:var(--exec);border-color:var(--exec)} .pill.bad{color:var(--warn);border-color:var(--warn)}
+  #stage{position:relative;min-height:0} canvas{position:absolute;inset:0;width:100%;height:100%}
+  aside{border-left:1px solid var(--line);background:var(--panel);overflow:auto;padding:12px}
+  aside h2{font-size:11px;letter-spacing:.1em;color:var(--dim);margin:14px 0 6px;text-transform:uppercase}
+  aside h2:first-child{margin-top:0}
+  #big{font-size:44px;font-weight:700;color:var(--exec);line-height:1}
+  #log div{padding:2px 0;border-bottom:1px solid #1a2336} #log .t{color:var(--dim)}
+  .spawn{color:var(--exec)} .gone,.terminating{color:var(--warn)} .running{color:var(--driver)}
+  #tl{grid-column:1/3;border-top:1px solid var(--line);background:var(--panel);position:relative}
+  #tl span{position:absolute;left:12px;top:6px;color:var(--dim);font-size:11px;letter-spacing:.1em}
+  #tlc{width:100%;height:100%}
+  #banner{position:absolute;left:16px;top:14px;color:var(--warn);display:none}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>SPARKFLOCK · LIVE TOPOLOGY</h1>
+    <span class="pill" id="p-feed">feed …</span>
+    <span class="pill" id="p-k8s">k8s …</span>
+    <span class="pill" id="p-sa">standalone …</span>
+    <span class="pill" id="p-minio">minio …</span>
+    <span class="pill" id="p-pg">postgres …</span>
+  </header>
+  <div id="stage"><canvas id="c"></canvas><div id="banner"></div></div>
+  <aside>
+    <h2>Executors (K8s pods)</h2>
+    <div><span id="big">–</span> <span id="ceil" style="color:var(--dim)"></span></div>
+    <div id="conf" style="color:var(--dim);margin-top:4px"></div>
+    <h2>Standalone cluster</h2>
+    <div id="sa" style="color:var(--dim)">not running</div>
+    <h2>Event log</h2>
+    <div id="log"></div>
+    <h2>Legend</h2>
+    <div style="color:var(--dim)">dashed ghost = requested, not ready<br>solid cube = running<br>sinking red = terminating / removed<br>lines show wiring, not throughput</div>
+  </aside>
+  <div id="tl"><span>EXECUTOR COUNT · LAST 5 MIN</span><canvas id="tlc"></canvas></div>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const cv = $('c'), cx = cv.getContext('2d');
+const tlc = $('tlc'), tx = tlc.getContext('2d');
+let S = null, lastMsg = 0;
+const nodes = new Map();           // pod name -> {slot, born, phase, dying, dyingAt}
+const COL = {minio:'#c8527a', driver:'#f5a524', exec:'#35d6a4', pg:'#4f8cff', master:'#b48cff', worker:'#8f6bff'};
+
+function shade(hex, f){ const n=parseInt(hex.slice(1),16); let r=n>>16,g=(n>>8)&255,b=n&255;
+  return `rgb(${Math.min(255,r*f|0)},${Math.min(255,g*f|0)},${Math.min(255,b*f|0)})`; }
+
+// ---- iso projection ------------------------------------------------------
+let W=0,H=0,DPR=1, U=34;
+function P(x,y,z=0){ return [W*0.5 + (x-y)*U*0.866, H*0.30 + (x+y)*U*0.5 - z]; }
+function poly(pts, fill, stroke, dash){
+  cx.beginPath(); pts.forEach((p,i)=>i?cx.lineTo(p[0],p[1]):cx.moveTo(p[0],p[1])); cx.closePath();
+  if(fill){cx.fillStyle=fill; cx.fill();}
+  if(stroke){cx.setLineDash(dash||[]); cx.strokeStyle=stroke; cx.lineWidth=1.2; cx.stroke(); cx.setLineDash([]);}
+}
+function cube(x,y,w,d,h,color,{alpha=1,z0=0,ghost=false,glow=0}={}){
+  const a=P(x,y,z0),b=P(x+w,y,z0),c=P(x+w,y+d,z0),e=P(x,y+d,z0);
+  const up=p=>[p[0],p[1]-h];
+  cx.save(); cx.globalAlpha=alpha;
+  if(glow){cx.shadowColor=color; cx.shadowBlur=glow;}
+  if(ghost){
+    poly([up(a),up(b),up(c),up(e)],'rgba(53,214,164,.06)',color,[4,4]);
+    poly([a,b,up(b),up(a)],null,color,[4,4]); poly([b,c,up(c),up(b)],null,color,[4,4]);
+  } else {
+    poly([e,c,up(c),up(e)],shade(color,.55));   // left face
+    poly([b,c,up(c),up(b)],shade(color,.75));   // right face
+    poly([up(a),up(b),up(c),up(e)],shade(color,1.05)); // top
+  }
+  cx.restore();
+  return P(x+w/2,y+d/2,z0+h);
+}
+function floor(x0,y0,x1,y1,label,color){
+  poly([P(x0,y0),P(x1,y0),P(x1,y1),P(x0,y1)],'rgba(255,255,255,.025)',color||'#243049');
+  cx.strokeStyle='rgba(255,255,255,.05)'; cx.lineWidth=1;
+  for(let i=x0+1;i<x1;i++){cx.beginPath();cx.moveTo(...P(i,y0));cx.lineTo(...P(i,y1));cx.stroke();}
+  for(let j=y0+1;j<y1;j++){cx.beginPath();cx.moveTo(...P(x0,j));cx.lineTo(...P(x1,j));cx.stroke();}
+  if(label){cx.fillStyle=color||'#7d8aa6';cx.font='11px ui-monospace,Menlo,monospace';
+    const p=P(x0,y1); cx.fillText(label,p[0]-4,p[1]+16);}
+}
+function label(p,t,color='#d7e0f0',dy=-10){cx.fillStyle=color;cx.font='11px ui-monospace,Menlo,monospace';
+  cx.textAlign='center'; cx.fillText(t,p[0],p[1]+dy); cx.textAlign='left';}
+
+// ---- layout --------------------------------------------------------------
+const POS = {minio:[0.5,3.2], driver:[4.5,3.2], pg:[14,3.2]};
+function execSlot(i){ const cols=4; return [8+(i%cols)*1.55, 0.6+Math.floor(i/cols)*1.55]; }
+function link(a,b,color,t,active){
+  const A=P(a[0],a[1],8),B=P(b[0],b[1],8);
+  cx.strokeStyle=color+'55'; cx.lineWidth=1; cx.setLineDash([2,5]);
+  cx.beginPath(); cx.moveTo(...A); cx.lineTo(...B); cx.stroke(); cx.setLineDash([]);
+  if(active) for(let k=0;k<3;k++){ const f=((t/1400)+k/3)%1;
+    cx.fillStyle=color; cx.beginPath(); cx.arc(A[0]+(B[0]-A[0])*f, A[1]+(B[1]-A[1])*f, 2.2,0,6.3); cx.fill(); }
+}
+
+// ---- state sync ----------------------------------------------------------
+function sync(){
+  const pods=(S.k8s.pods||[]).filter(p=>p.role==='executor');
+  const seen=new Set();
+  for(const p of pods){
+    seen.add(p.name);
+    let n=nodes.get(p.name);
+    if(!n){ const used=new Set([...nodes.values()].filter(v=>!v.dyingAt).map(v=>v.slot)); let s=0; while(used.has(s))s++;
+      n={slot:s,born:performance.now(),name:p.name}; nodes.set(p.name,n); }
+    n.phase=p.phase;
+    if(p.phase==='Terminating'&&!n.dyingAt) n.dyingAt=performance.now();
+  }
+  for(const [k,n] of nodes) if(!seen.has(k)&&!n.dyingAt) n.dyingAt=performance.now();
+}
+function ease(t){t=Math.max(0,Math.min(1,t));return 1-Math.pow(1-t,3);}
+
+// ---- draw ----------------------------------------------------------------
+function draw(t){
+  cx.setTransform(DPR,0,0,DPR,0,0); cx.clearRect(0,0,W,H);
+  if(!S){requestAnimationFrame(draw);return;}
+  const k8sOk=S.k8s.ok, svc=S.services||{};
+  // size the platform to the max slot in use so the grid grows with the ceiling
+  const live=[...nodes.values()]; const maxSlot=Math.max(7,...live.map(n=>n.slot));
+  const rows=Math.floor(maxSlot/4)+1;
+  U=Math.max(18,Math.min(36,W/26));
+  floor(-0.5,0,3,6.4,'OBJECT STORE',COL.minio);
+  floor(3.5,0,6.5,6.4,'DRIVER',COL.driver);
+  floor(7.4,0,7.4+4*1.55+0.2,rows*1.55+0.3,'EXECUTORS · scale up/down here',COL.exec);
+  floor(12.9,0,16,6.4,'DATABASE',COL.pg);
+
+  // wiring
+  const driverC=[POS.driver[0]+0.7,POS.driver[1]+0.7], minioC=[POS.minio[0]+0.7,POS.minio[1]+0.7], pgC=[POS.pg[0]+0.7,POS.pg[1]+0.7];
+  link(minioC,driverC,COL.minio,t,k8sOk);
+  const items=[];
+  for(const n of live){
+    const [ex,ey]=execSlot(n.slot); const c=[ex+0.4,ey+0.4];
+    if(!n.dyingAt && n.phase==='Running'){ link(driverC,c,COL.driver,t,true); link(c,pgC,COL.exec,t,true); }
+  }
+  // static nodes
+  const minioUp=svc.minio!==false;
+  label(cube(POS.minio[0],POS.minio[1],1.4,1.4,34,COL.minio,{alpha:minioUp?1:.35}),'MinIO (S3)');
+  label(cube(POS.pg[0],POS.pg[1],1.4,1.4,34,COL.pg,{alpha:svc.postgres!==false?1:.35}),'Postgres');
+  const drv=(S.k8s.pods||[]).find(p=>p.role==='driver');
+  if(drv){ const g=drv.phase==='Running'?18:0;
+    label(cube(POS.driver[0],POS.driver[1],1.4,1.4,46,COL.driver,{glow:g,ghost:drv.phase!=='Running'}),'driver · '+drv.phase); }
+  else label(P(driverC[0],driverC[1],20),'no driver pod','#ff5d5d');
+
+  // executors, back-to-front
+  items.push(...live.sort((a,b)=>(execSlot(a.slot).reduce((s,v)=>s+v,0))-(execSlot(b.slot).reduce((s,v)=>s+v,0))));
+  for(const n of items){
+    const [ex,ey]=execSlot(n.slot); const age=(performance.now()-n.born)/700;
+    let alpha=1,z0=0,color=COL.exec,ghost=false,glow=10;
+    if(n.dyingAt){ const d=(performance.now()-n.dyingAt)/1400; if(d>1){nodes.delete(n.name);continue;}
+      z0=-26*ease(d); alpha=1-ease(d); color='#ff5d5d'; glow=0; }
+    else if(n.phase==='Pending'||n.phase==='Starting'){ ghost=true; alpha=.55+.25*Math.sin(t/220); }
+    else { z0=-30*(1-ease(age)); alpha=Math.min(1,.25+age); glow=10+8*Math.max(0,1-age); }
+    const top=cube(ex,ey,0.8,0.8,28,color,{alpha,z0,ghost,glow});
+    label(top,n.name.split('-').pop(),'#d7e0f0',-6);
+  }
+
+  // standalone cluster: second platform below the K8s stage
+  const sa=S.standalone;
+  if(sa&&sa.ok){
+    floor(3.5,7.4,12,11.4,'STANDALONE (native) · '+(sa.status||''),COL.master);
+    label(cube(4.3,8.3,1.4,1.4,40,COL.master),'master');
+    const ws=sa.workers||[];
+    ws.forEach((w,i)=>{ const x=7+(i%4)*1.3,y=8.2+Math.floor(i/4)*1.3;
+      const busy=w.coresused>0; label(cube(x,y,0.8,0.8,24,COL.worker,{alpha:w.state==='ALIVE'?1:.3,glow:busy?14:0}),
+        'w'+(i+1)+(busy?' ●':''),'#d7e0f0',-6);
+      link([5,9],[x+.4,y+.4],COL.master,t,w.state==='ALIVE'); });
+  }
+  requestAnimationFrame(draw);
+}
+
+// ---- timeline ------------------------------------------------------------
+function drawTl(){
+  const r=tlc.getBoundingClientRect(); tlc.width=r.width*DPR; tlc.height=r.height*DPR;
+  tx.setTransform(DPR,0,0,DPR,0,0); const w=r.width,h=r.height; tx.clearRect(0,0,w,h);
+  const hist=(S&&S.history)||[]; if(hist.length<2) return;
+  const max=Math.max(4,...hist.map(x=>x[1]))+1, t1=hist[hist.length-1][0], t0=t1-300;
+  tx.strokeStyle='#243049'; tx.fillStyle='#7d8aa6'; tx.font='10px ui-monospace,Menlo,monospace';
+  for(let v=0;v<=max;v++){ const y=h-18-(v/max)*(h-34); tx.beginPath();tx.moveTo(40,y);tx.lineTo(w-8,y);tx.stroke(); tx.fillText(v,20,y+3); }
+  tx.beginPath(); tx.strokeStyle=COL.exec; tx.lineWidth=2;
+  hist.forEach(([t,v],i)=>{ const x=40+((t-t0)/300)*(w-48), y=h-18-(v/max)*(h-34);
+    if(i){ const [pt,pv]=hist[i-1]; const px=40+((pt-t0)/300)*(w-48), py=h-18-(pv/max)*(h-34);
+      tx.lineTo(x,py); tx.lineTo(x,y);} else tx.moveTo(x,y); });
+  tx.stroke();
+}
+
+// ---- sidebar / pills -----------------------------------------------------
+function pill(id,ok,txt){const e=$(id);e.textContent=txt;e.className='pill '+(ok?'ok':'bad');}
+function ui(){
+  const live=Date.now()-lastMsg<4000;
+  pill('p-feed',live,live?'feed live':'feed LOST');
+  pill('p-k8s',S.k8s.ok,S.k8s.ok?'k8s api ok':'k8s: '+(S.k8s.err||'down'));
+  const sa=S.standalone; const p=$('p-sa'); p.textContent=sa.ok?'standalone '+(sa.workers||[]).filter(w=>w.state==='ALIVE').length+' workers':'standalone off'; p.className='pill'+(sa.ok?' ok':'');
+  pill('p-minio',S.services.minio,'minio '+(S.services.minio?'up':'down'));
+  pill('p-pg',S.services.postgres,'postgres '+(S.services.postgres?'up':'down'));
+  const ex=(S.k8s.pods||[]).filter(p=>p.role==='executor');
+  const n=ex.filter(p=>p.phase==='Running').length, pend=ex.filter(p=>p.phase!=='Running'&&p.phase!=='Terminating').length;
+  $('big').textContent=n; $('ceil').textContent=S.conf.max?`/ ${S.conf.max} max`:'';
+  $('conf').textContent=(S.conf.max?`min ${S.conf.min||'?'} · max ${S.conf.max} · idle ${S.conf.idle||'?'}`:'scaling conf: n/a')+(pend?` · ${pend} starting`:'');
+  const sa2=$('sa'); sa2.textContent=sa.ok?`master ${sa.status} · ${(sa.workers||[]).length} workers · cores ${sa.coresused}/${sa.cores} · apps ${(sa.apps||[]).length}`:'not running (native cluster: make cluster-up)';
+  $('log').innerHTML=S.events.slice(0,25).map(e=>`<div><span class="t">${new Date(e.t*1000).toLocaleTimeString()}</span> <span class="${e.ev}">${e.msg}</span></div>`).join('');
+  const b=$('banner'); b.style.display=S.k8s.ok?'none':'block'; b.textContent=S.k8s.ok?'':'K8s unreachable: '+S.k8s.err;
+}
+
+function resize(){ const r=$('stage').getBoundingClientRect(); DPR=window.devicePixelRatio||1;
+  W=r.width;H=r.height; cv.width=W*DPR; cv.height=H*DPR; }
+window.addEventListener('resize',resize); resize();
+
+function connect(){
+  const es=new EventSource('/events');
+  es.onmessage=e=>{ S=JSON.parse(e.data); lastMsg=Date.now(); sync(); ui(); drawTl(); };
+  es.onerror=()=>{ lastMsg=0; if(S) ui(); };
+}
+connect(); setInterval(()=>{ if(S) ui(); },2000); requestAnimationFrame(draw);
+</script>
+</body>
+</html>

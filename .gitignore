@@ -1,0 +1,15 @@
+.env
+.venv/
+data/
+.spark/
+*.tfstate*
+.terraform/
+terraform.tfvars
+__pycache__/
+topology/console-trigger.js
+.claude/
+.env.*
+!.env.example
+!.env.staging.example
+*.tfvars
+!*.tfvars.example

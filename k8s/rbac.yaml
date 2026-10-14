@@ -1,0 +1,25 @@
+# The Spark driver pod talks to the Kubernetes API to create/delete executor
+# pods. That is what "scaling" physically is on K8s, so it needs this Role.
+apiVersion: v1
+kind: Namespace
+metadata: { name: spark }
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata: { name: spark, namespace: spark }
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: { name: spark-executor-manager, namespace: spark }
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services", "configmaps", "persistentvolumeclaims"]
+    verbs: ["create", "get", "list", "watch", "delete", "deletecollection", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: { name: spark-executor-manager, namespace: spark }
+subjects:
+  - { kind: ServiceAccount, name: spark, namespace: spark }
+roleRef:
+  { kind: Role, name: spark-executor-manager, apiGroup: rbac.authorization.k8s.io }
