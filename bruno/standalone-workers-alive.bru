@@ -1,0 +1,32 @@
+meta {
+  name: Standalone workers alive
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{masterUi}}/json/
+  body: none
+  auth: none
+}
+
+docs {
+  Spark standalone master JSON (same source as `scripts/standalone.sh status`).
+  Worker count = workers with state == ALIVE. Needs `make cluster-up N=<n>` running.
+  Not the k8s executors: use "K8s executors running" for those.
+}
+
+script:post-response {
+  const alive = (res.getBody().workers || []).filter(w => w.state === "ALIVE");
+  bru.setVar("aliveWorkers", alive.length);
+  console.log("ALIVE workers:", alive.length, "cores:", res.getBody().cores, "used:", res.getBody().coresused);
+}
+
+tests {
+  test("master reachable", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("ALIVE worker count is reported", function () {
+    expect(bru.getVar("aliveWorkers")).to.be.a("number");
+  });
+}

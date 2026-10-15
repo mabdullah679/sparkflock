@@ -23,7 +23,7 @@ stream: ## run the always-on job on the standalone cluster (picks up new files b
 once: ## process everything pending, then exit
 	scripts/submit.sh cluster --mode once
 
-cluster-up: ## start Spark master + N workers on this Mac:  make cluster-up N=2
+cluster-up: ## start Spark master + N worker containers:  make cluster-up N=2
 	scripts/standalone.sh up $(or $(N),1)
 
 cluster-down: ## stop the standalone cluster
@@ -44,7 +44,7 @@ count: ## row counts in Postgres
 reset: ## wipe files, checkpoint and tables (dev only)
 	scripts/reset.sh
 
-test: ## end-to-end proof on the native Spark cluster (~6 min)
+test: ## end-to-end proof on the docker Spark cluster (~6 min)
 	tests/e2e.sh
 
 k8s-start: ## start minikube, build + load the Spark image, apply RBAC + secret

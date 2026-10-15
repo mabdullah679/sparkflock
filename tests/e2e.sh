@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# End-to-end proof against the REAL stack (MinIO + Postgres + Spark standalone).
+# End-to-end proof against the REAL stack (MinIO + Postgres + Spark standalone, all in docker).
 # Each check prints PASS/FAIL; exit code is non-zero if any FAIL.
 #   tests/e2e.sh            all stages
 #   BIG_ROWS=600000 tests/e2e.sh
@@ -44,7 +44,7 @@ python3 scripts/gen_events.py --rows 1 --prefix auto --out data/one.json >/dev/n
 $S3 s3 cp data/one.json "s3://$S3_BUCKET/incoming/one.json" --quiet
 w="$(wait_rows 1 60)"
 check "row appeared without any manual step (latency ${w}s)" "1" "$(n_events)"
-pkill -P $STREAM_PID 2>/dev/null; kill $STREAM_PID 2>/dev/null; sleep 3; pkill -f "spark/job.py" 2>/dev/null || true
+docker rm -f sparkflock-spark-driver >/dev/null 2>&1; wait $STREAM_PID 2>/dev/null; sleep 3
 fi
 
 if want 2; then

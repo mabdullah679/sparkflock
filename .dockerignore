@@ -1,0 +1,4 @@
+# Allow-list: k8s/Dockerfile only COPYs spark/. Without this the build context
+# ships data/ (~200 MB) and .venv/ (~340 MB) to the daemon on every build.
+*
+!spark/

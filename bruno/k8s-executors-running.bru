@@ -1,0 +1,34 @@
+meta {
+  name: K8s executors running
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{topologyUrl}}/api/state
+  body: none
+  auth: none
+}
+
+docs {
+  Read-only topology feed (`make topo-up`). Executors = pods with role "executor"
+  in phase Running. Same filter family as the dashboard timeline, which also counts
+  Starting/Pending; this probe counts Running only, i.e. ready to take work.
+}
+
+script:post-response {
+  const s = res.getBody();
+  const execs = ((s.k8s || {}).pods || []).filter(p => p.role === "executor");
+  const running = execs.filter(p => p.phase === "Running").length;
+  bru.setVar("runningExecutors", running);
+  console.log("executors running:", running, "of", execs.length, "total (any phase)");
+}
+
+tests {
+  test("topology feed reachable", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("k8s API reachable from topology service", function () {
+    expect(res.getBody().k8s.ok).to.equal(true);
+  });
+}

@@ -36,6 +36,63 @@ services:
       timeout: 3s
       retries: 20
 
+  # Spark standalone cluster: `--profile cluster`, so `make up` starts only MinIO + Postgres.
+  # Same image as the K8s pods (jars baked in, Python 3.8). The master never adds workers;
+  # N is `--scale spark-worker=N` (scripts/standalone.sh up N).
+  spark-master:
+    image: sparkflock-spark:3.5.6
+    build: { context: ., dockerfile: k8s/Dockerfile }
+    container_name: sparkflock-spark-master
+    profiles: [cluster]
+    entrypoint: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.master.Master",
+                 "--host", "spark-master", "--port", "7077", "--webui-port", "8080"]
+    ports:
+      - "27077:7077"   # spark://
+      - "28080:8080"   # master UI + /json/ (topology dashboard, Bruno probe)
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8080/json/')"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  spark-worker:   # no container_name: compose names replicas sparkflock-spark-worker-1..N
+    image: sparkflock-spark:3.5.6
+    profiles: [cluster]
+    depends_on: { spark-master: { condition: service_healthy } }
+    environment:
+      PYSPARK_PYTHON: python3
+      # Each app copies the ~280 MB SDK jar into the work dir; without cleanup 60 runs = 15 GB.
+      SPARK_WORKER_OPTS: "-Dspark.worker.cleanup.enabled=true -Dspark.worker.cleanup.interval=60 -Dspark.worker.cleanup.appDataTtl=120"
+    # Registers by IP: a replica's hostname is its container id, which other containers cannot resolve.
+    entrypoint: ["sh", "-c", "exec /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker --host $$(hostname -i) --cores 2 --memory 2g --work-dir /tmp/spark-work spark://spark-master:7077"]
+
+  # The driver. Run per job (scripts/submit.sh cluster), never by `up`. It must live on this
+  # network: executors in worker containers connect back to it, and cannot reach the Mac's 127.0.0.1.
+  spark-submit:
+    image: sparkflock-spark:3.5.6
+    profiles: [cluster]
+    environment:
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      S3_BUCKET: ${S3_BUCKET}
+      S3_PREFIX: ${S3_PREFIX}
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_SSLMODE: ${DB_SSLMODE}
+      MAX_PARTITION_MB: ${MAX_PARTITION_MB}
+      JDBC_PARTITIONS: ${JDBC_PARTITIONS}
+      MAX_FILES_PER_TRIGGER: ${MAX_FILES_PER_TRIGGER}
+      TRIGGER_SECONDS: ${TRIGGER_SECONDS}
+      SPARK_JARS_PACKAGES: ""          # jars are baked into the image
+      SPARK_SUBMIT_EXTRA: ${SPARK_SUBMIT_EXTRA:-}
+      PYSPARK_PYTHON: python3
+    volumes: ["./spark:/opt/app:ro"]   # live job.py: no image rebuild after an edit
+    entrypoint: ["sh", "-c", "exec /opt/spark/bin/spark-submit --master spark://spark-master:7077 --conf spark.driver.host=$$(hostname -i) --conf spark.driver.bindAddress=0.0.0.0 --conf spark.ui.showConsoleProgress=false $$SPARK_SUBMIT_EXTRA /opt/app/job.py \"$$@\"", "--"]
+
 volumes:
   minio-data:
   pg-data:
