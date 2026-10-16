@@ -29,7 +29,8 @@ Open a terminal in this folder.
 
   Step 1   make init          one time: installs Spark into a private folder
   Step 2   make up            starts MinIO + Postgres, creates the bucket
-  Step 3   make cluster-up    starts a Spark master and 1 worker
+  Step 3   make cluster-up    starts a Spark master and 1 worker, both as
+                              docker containers (make cluster-up N=3 for 3)
   Step 4   make stream        starts the always-on job (leave it running)
 
 Open a second terminal:
@@ -138,7 +139,8 @@ WHERE THINGS ARE
   README.md               the same project, written for an AI agent
 
 PORTS USED (chosen not to clash with other projects)
-  MinIO 29000 (web console 29001), Postgres 25432, Spark master 27077.
+  MinIO 29000 (web console 29001), Postgres 25432, Spark master 27077,
+  Spark master web page 28080, dashboard 29090.
 
 LIVE TOPOLOGY DASHBOARD (added 2026-10-15)
 

@@ -13,3 +13,4 @@ topology/console-trigger.js
 !.env.staging.example
 *.tfvars
 !*.tfvars.example
+.spark-stream.log

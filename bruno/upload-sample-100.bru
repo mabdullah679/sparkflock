@@ -1,0 +1,62 @@
+meta {
+  name: Upload sample (100 rows)
+  type: http
+  seq: 6
+}
+
+put {
+  url: {{s3Url}}/{{bucket}}/incoming/placeholder.json
+  body: text
+  auth: awsv4
+}
+
+headers {
+  Content-Type: text/plain
+}
+
+auth:awsv4 {
+  accessKeyId: {{process.env.S3_ACCESS_KEY}}
+  secretAccessKey: {{process.env.S3_SECRET_KEY}}
+  sessionToken: 
+  service: s3
+  region: us-east-1
+  profileName: 
+}
+
+body:text {
+  replaced-by-pre-request-script
+}
+
+docs {
+  The smallest end-to-end test: drops 100 JSON events into incoming/.
+  Each run uses a fresh id prefix, so every run really adds 100 rows
+  (the same ids twice would be ignored by design).
+  Needs the stream job running (`make stream`, or k8s/submit.sh stream) and
+  S3_ACCESS_KEY / S3_SECRET_KEY in bruno/.env.
+  After ~10 s run `make count`: events should be up by exactly 100.
+}
+
+script:pre-request {
+  const run = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const types = ["click", "view", "purchase", "refund", "login"];
+  const ts = new Date().toISOString().slice(0, 19) + "Z";
+  const lines = [];
+  for (let r = 0; r < 100; r++) {
+    lines.push(JSON.stringify({
+      event_id: `smp-${run}-${r}`,
+      user_id: 1 + ((Math.random() * 50000) | 0),
+      event_type: types[r % 5],
+      amount: +(1 + Math.random() * 499).toFixed(2),
+      ts,
+    }));
+  }
+  req.setUrl(`${bru.getEnvVar("s3Url")}/${bru.getEnvVar("bucket")}/incoming/sample_${run}.json`);
+  req.setBody(lines.join("\n") + "\n");
+  console.log(`sample ${run}: 100 rows`);
+}
+
+tests {
+  test("MinIO accepted the upload", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+}

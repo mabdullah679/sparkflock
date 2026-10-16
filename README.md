@@ -1,7 +1,8 @@
 # sparkflock — agent guide
 
 JSON files land in S3-compatible storage → Spark (Structured Streaming) → Postgres.
-Local stack: MinIO (S3) + Postgres (RDS stand-in) + native Spark 3.5.6 + minikube.
+Local stack, all docker: MinIO (S3) + Postgres (RDS stand-in) + Spark 3.5.6 standalone (master, workers, driver as containers) + minikube.
+Only `submit.sh local` (single JVM, used for staging) still runs Spark on the Mac.
 Same `spark/job.py` targets real S3 + RDS by env vars only.
 
 Human-facing guide: `README.txt` (plain-English twin: **update both in the same step**).
@@ -51,8 +52,10 @@ Extra executors only parallelise the Spark half; the merge is serial in Postgres
 spark/job.py            the pipeline. Config.from_env → build_spark → readStream.json → foreachBatch
 spark/schema.sql        events, events_rejects, *_stage; run by the job on every start
 scripts/env.sh          sourced by all scripts; ENV_FILE=… switches local/staging
-scripts/submit.sh       local|cluster → spark-submit with --packages (REQUIRED, see gotchas)
-scripts/standalone.sh   master + N workers via spark-class (pip pyspark has no sbin/start-*.sh)
+scripts/submit.sh       local → native spark-submit with --packages (REQUIRED, see gotchas); cluster → `compose run` driver container
+scripts/standalone.sh   up N | down | status: compose profile `cluster`, `--scale spark-worker=N`, waits for N ALIVE
+docker-compose.yml      minio, postgres; profile `cluster`: spark-master, spark-worker (scaled), spark-submit (driver)
+bruno/                  API probes: ALIVE standalone workers (:28080/json/), Running K8s executors (:29090/api/state)
 scripts/gen_events.py   deterministic JSONL generator (--rows --prefix --bad)
 scripts/reset.sh        wipe incoming/, _checkpoints/, tables
 k8s/Dockerfile          apache/spark:3.5.6-python3 + 3 jars + job.py
@@ -98,12 +101,14 @@ Live scale demo without a terminal: paste `topology/console-trigger.js` into Dev
 - Empty S3 prefix = nonexistent path = `PATH_NOT_FOUND`. `ensure_input_prefix` creates the marker.
 - `minikube start` switches the kubectl **default context**. Always pass `--context sparkflock`; `make k8s-start` restores the previous one.
 - Changing `spark/job.py` requires `docker build` + `minikube image load` (job is baked into the image).
+- Standalone in docker: the driver **must** be a container on the compose network (`spark-submit` service). Executors in worker containers connect back to the driver; a Mac-side driver on 127.0.0.1 is unreachable to them. Workers and driver advertise `hostname -i` (an IP), because a scaled replica's hostname is its container id, which no other container can resolve.
+- Stop a running stream driver by container name: `docker rm -f sparkflock-spark-driver` (what `tests/e2e.sh` stage 1 does). Killing only the `docker compose run` client was not tested as a way to stop it.
 - Hadoop 3.3.4 + AWS SDK v1 1.12.262 is the pairing for Spark 3.5.x. Do not bump one alone. Spark 4 / Hadoop 3.4 uses SDK v2 and needs different MinIO settings (untested).
 
 ## Shared machine — contention
 
 Other projects' containers run here (floci on 4566, many `nfl-*`, `claimsdemo-*`, Postgres on 5432/5435/5440/15432…).
-This project uses only `sparkflock-*` containers and ports 29000, 29001, 25432, 27077, 28080+, 29090, minikube profile `sparkflock`.
+This project uses only `sparkflock*` containers (`sparkflock` itself is the minikube node) and ports 29000, 29001, 25432, 27077, 28080, 29090, minikube profile `sparkflock`.
 Never `docker rm`, `docker compose down` outside this folder, or `minikube delete` without `-p sparkflock`.
 
 ## Staging (unverified path)

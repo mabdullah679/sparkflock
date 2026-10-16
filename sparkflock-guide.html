@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sparkflock in Plain English</title>
+<style>
+  :root{--bg:#fafaf7;--card:#fff;--ink:#1d2330;--mute:#5d6678;--line:#dfe2ea;--accent:#2d6cdf;--ok:#1f8f4e;--bad:#c23b3b;--warn:#b7791f;--code:#eef1f6}
+  @media (prefers-color-scheme:dark){:root{--bg:#12151c;--card:#1b2029;--ink:#e8ebf2;--mute:#9aa4b8;--line:#2c3342;--accent:#6aa0ff;--ok:#4cc380;--bad:#ef7676;--warn:#e3b04b;--code:#252b38}}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  main{max-width:780px;margin:0 auto;padding:32px 16px 80px}
+  h1{font-size:2rem;margin:0 0 6px}
+  h2{font-size:1.35rem;margin:44px 0 10px;padding-top:8px;border-top:1px solid var(--line)}
+  .sub{color:var(--mute);margin:0 0 24px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:14px 0}
+  .tldr{border-left:5px solid var(--accent)}
+  code,kbd{background:var(--code);padding:2px 6px;border-radius:5px;font:0.88em ui-monospace,Menlo,monospace}
+  pre{background:var(--code);padding:12px 14px;border-radius:8px;overflow-x:auto;font:0.88em ui-monospace,Menlo,monospace;margin:8px 0}
+  nav{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 8px}
+  nav a{font-size:.85rem;color:var(--accent);text-decoration:none;border:1px solid var(--line);border-radius:99px;padding:3px 11px;background:var(--card)}
+  .step{display:flex;gap:14px;margin:12px 0}
+  .num{flex:none;width:32px;height:32px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:700}
+  .step p{margin:2px 0}
+  .tag{display:inline-block;font-size:.75rem;font-weight:700;border-radius:99px;padding:1px 9px;color:#fff}
+  .ok{background:var(--ok)}.bad{background:var(--bad)}.warn{background:var(--warn)}
+  table{width:100%;border-collapse:collapse;font-size:.95rem}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--mute);font-weight:600}
+  svg{width:100%;height:auto;display:block}
+  svg text{fill:var(--ink);font:14px -apple-system,Segoe UI,sans-serif}
+  svg .box{fill:var(--card);stroke:var(--accent);stroke-width:2}
+  svg .arrow{stroke:var(--mute);stroke-width:2;fill:none}
+  svg .small{fill:var(--mute);font-size:12px}
+  details{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 16px;margin:10px 0}
+  summary{cursor:pointer;font-weight:600}
+  .bar{display:flex;height:34px;border-radius:8px;overflow:hidden;margin:10px 0;font-size:.8rem;color:#fff}
+  .bar div{display:grid;place-items:center;white-space:nowrap}
+</style>
+</head>
+<body>
+<main>
+
+<h1>Sparkflock, in plain English</h1>
+<p class="sub">Read top to bottom. By the end you will know what it does, how to run it, and what is proven versus not.</p>
+
+<nav>
+  <a href="#big">Big picture</a><a href="#parts">The parts</a><a href="#run">Run it</a><a href="#bad">Bad data</a>
+  <a href="#scale">Scaling</a><a href="#fast">Is more faster?</a><a href="#dash">Dashboard</a><a href="#proof">Proven / not</a><a href="#where">Where things are</a>
+</nav>
+
+<div class="card tldr">
+  <strong>One sentence:</strong> you drop a file of JSON messages into a storage bucket, and about 10 seconds later those messages are rows in a database. Nobody presses a button in between.
+</div>
+
+<h2 id="big">1. The big picture</h2>
+<p>Think of a company mailroom. Letters (your data) get dropped in a tray. A clerk (Spark) checks the tray every few seconds, opens each letter, and files it in the right cabinet (the database). Letters that are unreadable go in a separate "problem" drawer instead of jamming the whole mailroom.</p>
+
+<div class="card">
+<svg viewBox="0 0 720 150" role="img" aria-label="File goes to bucket, Spark reads it, rows land in Postgres">
+  <defs><marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--mute)"/></marker></defs>
+  <rect class="box" x="10" y="35" width="130" height="64" rx="10"/><text x="75" y="63" text-anchor="middle">Your file</text><text class="small" x="75" y="82" text-anchor="middle">JSON messages</text>
+  <rect class="box" x="195" y="35" width="130" height="64" rx="10"/><text x="260" y="63" text-anchor="middle">Bucket</text><text class="small" x="260" y="82" text-anchor="middle">MinIO (fake S3)</text>
+  <rect class="box" x="380" y="35" width="130" height="64" rx="10"/><text x="445" y="63" text-anchor="middle">Spark</text><text class="small" x="445" y="82" text-anchor="middle">checks every 5 s</text>
+  <rect class="box" x="565" y="35" width="130" height="64" rx="10"/><text x="630" y="63" text-anchor="middle">Database</text><text class="small" x="630" y="82" text-anchor="middle">Postgres (fake RDS)</text>
+  <path class="arrow" d="M140 67 H193" marker-end="url(#a)"/><path class="arrow" d="M325 67 H378" marker-end="url(#a)"/><path class="arrow" d="M510 67 H563" marker-end="url(#a)"/>
+  <text class="small" x="360" y="135" text-anchor="middle">Spark cannot be "woken" by the bucket. It looks. Measured delay: 9 to 10 seconds.</text>
+</svg>
+</div>
+
+<p><strong>Why "fake" S3 and RDS?</strong> So everything runs free on your Mac. Later, the same code is meant to point at real Amazon S3 and RDS by changing settings only, not code. <span class="tag warn">Not yet tried on real AWS</span></p>
+
+<h2 id="parts">2. The parts</h2>
+<table>
+<tr><th>Part</th><th>What it is, simply</th></tr>
+<tr><td><strong>MinIO</strong></td><td>The bucket. Files land in the folder <code>incoming/</code>.</td></tr>
+<tr><td><strong>Spark</strong></td><td>The worker. Watches the folder, reads new data, moves it along.</td></tr>
+<tr><td><strong>Postgres</strong></td><td>The database. Table <code>events</code> = good messages. Table <code>events_rejects</code> = broken ones, with the reason.</td></tr>
+<tr><td><strong>Terraform</strong></td><td>Creates the bucket (and on AWS, the database) from written instructions instead of clicking.</td></tr>
+<tr><td><strong>Minikube</strong></td><td>A small Kubernetes on your Mac. It lets Spark add and remove workers by itself when a big file arrives.</td></tr>
+<tr><td><strong>Docker</strong></td><td>Runs MinIO, Postgres, and the Spark master/workers as containers.</td></tr>
+</table>
+
+<h2 id="run">3. Run it yourself</h2>
+<p>You need: Docker Desktop, minikube, kubectl, terraform, uv, aws CLI, and Java 21 (<code>brew install openjdk@21</code>). <strong>Java 26 does not work</strong> with this Spark.</p>
+
+<p><strong>Terminal 1</strong> (open it in the project folder):</p>
+<div class="step"><div class="num">1</div><div><p><code>make init</code></p><p>One time. Installs Spark into a private folder.</p></div></div>
+<div class="step"><div class="num">2</div><div><p><code>make up</code></p><p>Starts MinIO and Postgres, creates the bucket.</p></div></div>
+<div class="step"><div class="num">3</div><div><p><code>make cluster-up</code></p><p>Starts a Spark master and 1 worker as containers. <code>make cluster-up N=3</code> gives 3 workers.</p></div></div>
+<div class="step"><div class="num">4</div><div><p><code>make stream</code></p><p>Starts the always-on job. Leave it running.</p></div></div>
+
+<p><strong>Terminal 2:</strong></p>
+<div class="step"><div class="num">5</div><div><p><code>make gen-one</code></p><p>Makes a file holding one JSON message.</p></div></div>
+<div class="step"><div class="num">6</div><div><p><code>make upload FILE=data/one.json</code></p><p>Drops it in the bucket.</p></div></div>
+<div class="step"><div class="num">7</div><div><p>Wait about 10 seconds, then <code>make count</code></p><p>You should see <strong>1 event</strong>. You touched nothing between step 6 and 7. That is the "automatic" part.</p></div></div>
+
+<div class="card">
+  <strong>Try a big one:</strong> <code>make gen-big</code> then <code>make upload FILE=data/big.json</code> (600,000 messages, 80 MB).<br>
+  <strong>Stop everything:</strong> <code>make cluster-down</code> then <code>make down</code>.<br>
+  <strong>Prove it works:</strong> <code>make test</code> checks 16 things end to end (about 6 minutes) and should end with <code>ALL PASS</code>.
+</div>
+
+<details><summary>What if the job isn't running?</summary>
+<p>Nothing happens to new files until you start it. When you do, it catches up on everything it missed.</p></details>
+
+<h2 id="bad">4. What happens with bad data</h2>
+<ul>
+  <li>A line that isn't valid JSON, or has no <code>event_id</code>, does <strong>not</strong> crash the job. It goes into <code>events_rejects</code> with the reason.</li>
+  <li>A message saved as indented, multi-line JSON (one object, or a list) is accepted as a whole. Indented files over 32 MB are not.</li>
+  <li><strong>Uploading the same file twice does not make duplicate rows.</strong> The database merges rows safely, so replays are harmless.</li>
+</ul>
+
+<h2 id="scale">5. Does it add workers by itself?</h2>
+<div class="card">
+<p><strong>On plain Spark ("standalone"): No.</strong> Measured: with 1 worker, an 80 MB file was handled by exactly 1 worker and the master did not start a second. Workers = whatever <em>you</em> started. A bigger file just gets cut into more pieces and spread over the workers that exist.</p>
+<p><strong>On Kubernetes (minikube): Yes.</strong> The job asks Kubernetes for more worker pods while work is waiting, and hands them back after 20 idle seconds.</p>
+<table>
+<tr><th>Limit set</th><th>Measured result</th></tr>
+<tr><td>Max 4 workers</td><td>1 → 2 → 4 within 10 s, then back to 1 about 20–30 s after work finished</td></tr>
+<tr><td>Max 2 workers</td><td>1 → 2 → 1</td></tr>
+</table>
+</div>
+<pre>make k8s-start            # one time: starts minikube, builds the Spark image
+make k8s-test MAX=4       # uploads a big file, watches pods appear then vanish</pre>
+<p><strong>Dials</strong> (in <code>k8s/submit.sh</code>, lines 33–38): <code>MIN_EXECUTORS</code>, <code>MAX_EXECUTORS</code>, <code>IDLE_TIMEOUT</code>. Example: <code>MAX_EXECUTORS=6 k8s/submit.sh stream</code>. How finely a file is sliced is <code>MAX_PARTITION_MB</code> in <code>.env</code>.</p>
+<details><summary>If the Spark job fails right after minikube starts</summary>
+<p>The cluster's name lookup (CoreDNS) is still waking up. Wait, then submit again:</p>
+<pre>kubectl -n kube-system wait --for=condition=Ready pod -l k8s-app=kube-dns</pre></details>
+
+<h2 id="fast">6. Will more workers make it faster?</h2>
+<p><strong>Not for the 80 MB file, and it was measured why.</strong> Of 7.4 seconds:</p>
+<div class="bar">
+  <div style="flex:1.4;background:var(--accent)">Spark writes 1.4 s</div>
+  <div style="flex:4.1;background:var(--bad)">Postgres merges rows 4.1 s</div>
+  <div style="flex:1.9;background:var(--mute)">other 1.9 s</div>
+</div>
+<p>The merge is a single database job that extra workers cannot share. Repeated runs agreed: max 4 took 17–23 s, max 2 took 18–19 s, no consistent gain. More workers help when files are much bigger or the work per row is heavier. They don't speed up the database.</p>
+<p class="small" style="color:var(--mute)">The "other" slice is simply what's left over from the README's numbers (7.4 − 1.4 − 4.1); it was not separately measured.</p>
+
+<h2 id="dash">7. The live dashboard</h2>
+<p>A web page that draws your stack as 3D-ish blocks, updating every second: bucket → Spark driver → worker pods → database. It is <strong>read-only</strong>: it can look at pods but not create or delete anything.</p>
+<pre>make topo-up      # needs make k8s-start first
+open http://localhost:29090
+make topo-down</pre>
+<table>
+<tr><th>You see</th><th>It means</th></tr>
+<tr><td>Dashed, pulsing block</td><td>A worker was requested but isn't ready yet</td></tr>
+<tr><td>Solid block rising</td><td>Worker is running</td></tr>
+<tr><td>Red block sinking</td><td>Worker is being removed</td></tr>
+<tr><td>Top-left pills</td><td>Green = reachable, red = not</td></tr>
+<tr><td>"/ 4 max"</td><td>The real ceiling Spark was told to use</td></tr>
+<tr><td>Graph along the bottom</td><td>Worker count over the last 5 minutes</td></tr>
+</table>
+<p>Dotted lines show how things are <em>wired</em>, not how fast data moves. Nothing on this machine measures speed.</p>
+<p><strong>Make workers scale:</strong> run <code>make gen-big</code> then <code>make upload FILE=data/big.json</code>, and watch 1 worker → up to 4 → back to 1 about 20–30 s after the work ends.</p>
+
+<h2 id="proof">8. What is proven, and what is not</h2>
+<div class="card">
+<p><span class="tag ok">Proven on this Mac</span> (MinIO + Postgres + Spark + minikube)</p>
+<ul>
+  <li>Automatic pickup of new files</li>
+  <li>Replays don't create duplicates</li>
+  <li>Bad data goes to the rejects table</li>
+  <li>Worker counts on the Spark cluster</li>
+  <li>Pods scale up and down on minikube (a real 71 MB upload went 1 → 4 → 2, heading to 1)</li>
+</ul>
+</div>
+<div class="card">
+<p><span class="tag bad">Not done</span></p>
+<ul>
+  <li><strong>Real AWS was never tried.</strong> The staging Terraform (<code>terraform/envs/staging</code>) passes <code>terraform validate</code> but was never planned or applied, because this machine has no AWS credentials. The Spark job has never run against real S3 or RDS, which may behave differently (SSL forced, small instances slower).</li>
+  <li>Kubernetes pods talking to real S3 is not built (needs an AWS identity inside the pods).</li>
+  <li>Autoscaling the standalone cluster is not built, and Spark can't do it itself. Use Kubernetes mode.</li>
+  <li><strong>Nobody has seen the dashboard yet.</strong> No screenshot, no console-error check, and its drawing code hasn't been mutation-tested. Only its data feed and JavaScript syntax were checked.</li>
+  <li>The browser-console upload script was never run in a real browser.</li>
+</ul>
+<p><strong>Next:</strong> reconnect the Chrome extension, run the 8-step dashboard checklist in <code>README.txt</code>, break the drawing code on purpose to prove the check catches it, then fix whatever the screenshot shows.</p>
+</div>
+
+<details><summary>When you do try real AWS (staging, free credits) — not yet tried</summary>
+<ol>
+  <li>Log in to AWS in your terminal.</li>
+  <li><code>cd terraform/envs/staging</code>, copy <code>terraform.tfvars.example</code> to <code>terraform.tfvars</code>, fill it in.</li>
+  <li><code>terraform init &amp;&amp; terraform plan</code>. Read the plan: it makes one S3 bucket and one small RDS Postgres. Then <code>terraform apply</code>.</li>
+  <li>Copy <code>.env.staging.example</code> to <code>.env.staging</code>, fill from <code>terraform output</code>, then <code>ENV_FILE=.env.staging scripts/submit.sh local --mode once</code>.</li>
+  <li>When done: <code>terraform destroy</code>. RDS costs money if left running.</li>
+</ol></details>
+
+<h2 id="where">9. Where things are</h2>
+<table>
+<tr><th>Path</th><th>Role</th></tr>
+<tr><td><code>spark/job.py</code></td><td>The whole pipeline, one file (~250 lines)</td></tr>
+<tr><td><code>spark/schema.sql</code></td><td>The tables</td></tr>
+<tr><td><code>scripts/</code></td><td>Helpers: <code>gen_events.py</code>, <code>submit.sh</code>, <code>standalone.sh</code>, <code>presign_console.py</code></td></tr>
+<tr><td><code>k8s/</code></td><td>Dockerfile, permissions, <code>submit.sh</code> (the scaling dials)</td></tr>
+<tr><td><code>terraform/</code></td><td><code>modules/pipeline</code>, <code>envs/local</code>, <code>envs/staging</code></td></tr>
+<tr><td><code>tests/</code></td><td><code>e2e.sh</code> and <code>k8s_scale.sh</code> (the proofs)</td></tr>
+<tr><td><code>topology/</code></td><td>The dashboard</td></tr>
+<tr><td><code>presentation/index.html</code></td><td>Walkthrough with file and line references</td></tr>
+</table>
+<p><strong>Ports</strong> (chosen not to clash with other projects): MinIO 29000 (console 29001), Postgres 25432, Spark master 27077, Spark master web page 28080, dashboard 29090.</p>
+
+<p style="color:var(--mute);font-size:.85rem;margin-top:40px">Source: <code>README.txt</code> and the Makefile, as read on 2026-10-16. Measured numbers are the README's own; I did not re-run them.</p>
+
+</main>
+</body>
+</html>

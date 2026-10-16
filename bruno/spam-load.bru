@@ -1,0 +1,51 @@
+meta {
+  name: Spam load (watch scaling)
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{topologyUrl}}/api/state
+  body: none
+  auth: none
+}
+
+docs {
+  Fires {{bursts}} load bursts {{burstGapSeconds}}s apart (each = "Upload one load burst"),
+  so queued tasks keep Spark asking Kubernetes for executors. Then it samples the
+  dashboard feed every 5s for ~60s so the console shows executors climbing to the
+  ceiling and falling back to the floor after IDLE_TIMEOUT.
+  Prereqs: `make up`, `k8s/submit.sh stream` running (the K8s driver, not `make stream`),
+  `make topo-up`, and S3_ACCESS_KEY / S3_SECRET_KEY in bruno/.env.
+  Open http://localhost:29090 first and watch the timeline.
+}
+
+script:pre-request {
+  const n = parseInt(bru.getEnvVar("bursts") || "6", 10);
+  const gap = parseInt(bru.getEnvVar("burstGapSeconds") || "8", 10) * 1000;
+  for (let i = 1; i <= n; i++) {
+    console.log(`burst ${i}/${n}`);
+    const r = await bru.runRequest("upload-burst");
+    console.log(`  -> HTTP ${r.status}`);
+    if (r.status !== 200) throw new Error("burst " + i + " failed: HTTP " + r.status);
+    if (i < n) await bru.sleep(gap);
+  }
+}
+
+script:post-response {
+  const count = (b) => ((b.k8s || {}).pods || []).filter(p => p.role === "executor" && p.phase === "Running").length;
+  console.log("executors running right after last burst:", count(res.getBody()));
+  const base = bru.getEnvVar("topologyUrl");
+  const axios = require("axios");
+  for (let t = 0; t < 12; t++) {
+    await bru.sleep(5000);
+    const s = (await axios.get(base + "/api/state")).data;
+    console.log(`+${(t + 1) * 5}s executors running:`, count(s));
+  }
+}
+
+tests {
+  test("topology feed reachable", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+}

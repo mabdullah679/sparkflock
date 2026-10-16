@@ -1,0 +1,22 @@
+meta {
+  name: MinIO live
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{s3Url}}/minio/health/live
+  body: none
+  auth: none
+}
+
+docs {
+  Is the bucket server (MinIO, the fake S3) up? Needs `make up`.
+  200 = alive. Connection refused = `make up` was not run or Docker is stopped.
+}
+
+tests {
+  test("MinIO answers 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+}

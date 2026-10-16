@@ -1,0 +1,65 @@
+meta {
+  name: Upload one load burst
+  type: http
+  seq: 3
+}
+
+put {
+  url: {{s3Url}}/{{bucket}}/incoming/placeholder.json
+  body: text
+  auth: awsv4
+}
+
+headers {
+  Content-Type: text/plain
+}
+
+auth:awsv4 {
+  accessKeyId: {{process.env.S3_ACCESS_KEY}}
+  secretAccessKey: {{process.env.S3_SECRET_KEY}}
+  sessionToken: 
+  service: s3
+  region: us-east-1
+  profileName: 
+}
+
+body:text {
+  replaced-by-pre-request-script
+}
+
+docs {
+  One burst = {{burstRows}} unique JSON-lines events (~70 MB at 600k) PUT into
+  incoming/ on MinIO. The streaming job picks it up within one trigger and the K8s
+  driver asks for more executor pods. Watch http://localhost:29090.
+  Credentials come from process env (S3_ACCESS_KEY / S3_SECRET_KEY): put them in
+  bruno/.env (gitignored), never in this file.
+  Every event_id is unique per burst, so each burst really adds rows (replay-safe
+  dedupe would otherwise swallow a repeated file and nothing would scale).
+}
+
+script:pre-request {
+  const rows = parseInt(bru.getEnvVar("burstRows") || "600000", 10);
+  const run = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const types = ["click", "view", "purchase", "signup"];
+  const ts = new Date().toISOString().slice(0, 19) + "Z";
+  const lines = new Array(rows);
+  for (let r = 0; r < rows; r++) {
+    lines[r] = JSON.stringify({
+      event_id: `bru-${run}-${r}`,
+      user_id: (Math.random() * 1e5) | 0,
+      event_type: types[r & 3],
+      amount: +(Math.random() * 100).toFixed(2),
+      ts,
+    });
+  }
+  const body = lines.join("\n") + "\n";
+  req.setUrl(`${bru.getEnvVar("s3Url")}/${bru.getEnvVar("bucket")}/incoming/bruno_${run}.json`);
+  req.setBody(body);
+  console.log(`burst ${run}: ${rows} rows, ${(body.length / 1e6).toFixed(1)} MB`);
+}
+
+tests {
+  test("MinIO accepted the upload", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+}
