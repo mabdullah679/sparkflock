@@ -14,3 +14,8 @@ topology/console-trigger.js
 *.tfvars
 !*.tfvars.example
 .spark-stream.log
+*.pyc
+.DS_Store
+node_modules/
+*.log
+.pytest_cache/

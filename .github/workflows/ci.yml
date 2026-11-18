@@ -1,0 +1,41 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  static-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Shell scripts (shellcheck, errors only)
+        run: shellcheck -S error -e SC2148 scripts/*.sh tests/*.sh k8s/submit.sh
+      - name: Python compiles
+        run: python -I -m py_compile spark/job.py topology/server.py scripts/gen_events.py scripts/presign_console.py presentation/build.py
+      - name: Walkthrough line references still match the code
+        # build.py asserts every cited line range contains its anchor text, then the
+        # regenerated page must equal the committed one.
+        run: |
+          python -I presentation/build.py
+          git diff --exit-code presentation/index.html
+      - name: Compose files parse
+        run: |
+          docker compose --env-file .env.example --profile cluster config -q
+          MINIKUBE_IP=x docker compose -f topology/compose.yml config -q
+
+  secrets-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
