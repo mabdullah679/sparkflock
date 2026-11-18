@@ -86,7 +86,7 @@ ul.tight{padding-left:20px;margin:8px 0} ul.tight li{margin:4px 0}
 <thead><tr><th>Question</th><th>Answer</th><th>Evidence</th></tr></thead>
 <tbody>
 <tr><td>Does Spark read from MinIO into the database automatically?</td><td><span class="tag good">Yes, while the job runs</span><br>Spark has no S3 event hook, so it polls the prefix. If the job is down, files wait and it catches up when started.</td><td><span class="ref">spark/job.py:269</span><br>9&ndash;10 s upload-to-row, <code>tests/e2e.sh</code> stage 1</td></tr>
-<tr><td>Bigger file: does the Spark master add workers?</td><td><span class="tag bad">No</span><br>With 1 worker running, an 81 MB file used exactly 1 executor and the master stayed at 1 worker. Workers are what you start.</td><td><code>scripts/standalone.sh:20-23</code><br><code>tests/e2e.sh</code> stage 4</td></tr>
+<tr><td>Bigger file: does the Spark master add workers?</td><td><span class="tag bad">No</span><br>With 1 worker running, an 81 MB file used exactly 1 executor and the master stayed at 1 worker. Workers are what you start.</td><td><code>docker-compose.yml:58-67</code><br><code>tests/e2e.sh</code> stage 4</td></tr>
 <tr><td>So how does scaling really work?</td><td><span class="tag good">On Kubernetes, yes</span><br>Dynamic allocation: the driver asks the K8s API for executor pods when tasks queue, and returns them after the idle timeout.</td><td><code>k8s/submit.sh:30-38</code><br><code>tests/k8s_scale.sh</code></td></tr>
 <tr><td>Can we configure it?</td><td><span class="tag good">Yes</span> floor <span class="ref">k8s/submit.sh:33</span>, ceiling <span class="ref">k8s/submit.sh:35</span>, idle timeout <span class="ref">k8s/submit.sh:36</span>, piece size <span class="ref">spark/job.py:109</span>.</td><td>Ceiling 4 gave 4 pods, ceiling 2 gave 2, same file.</td></tr>
 <tr><td>Will more workers make it faster?</td><td><span class="tag warn">Not here</span><br>On this file 4.1 of 7.4 s is the Postgres merge, one connection that no executor can share.</td><td><span class="ref">spark/job.py:252</span><br>17&ndash;23 s at ceiling 4, 18&ndash;19 s at ceiling 2</td></tr>
@@ -195,11 +195,17 @@ ul.tight{padding-left:20px;margin:8px 0} ul.tight li{margin:4px 0}
 
 <h2 id="scale">Scaling</h2>
 <h3>Spark standalone on the Mac: you add workers, Spark does not</h3>
-<figure class="code"><figcaption><span class="ref">scripts/standalone.sh:20-23</span></figcaption><pre><code><span class="ln">20</span>    for i in $(seq 1 &quot;$n&quot;); do
-<span class="ln">21</span>      start &quot;worker$i&quot; &quot;$CLASS&quot; org.apache.spark.deploy.worker.Worker \
-<span class="ln">22</span>        --host &quot;$SA_MASTER_HOST&quot; --port $((27100 + i)) --webui-port $((28080 + i)) \
-<span class="ln">23</span>        --cores 2 --memory 2g --work-dir &quot;$RUN/work$i&quot; &quot;spark://$SA_MASTER_HOST:$SA_MASTER_PORT&quot;
-</code></pre><p class="note">Workers exist because this loop started them. Nothing in Spark's standalone master creates one.</p></figure>
+<figure class="code"><figcaption><span class="ref">docker-compose.yml:58-67</span></figcaption><pre><code><span class="ln">58</span>  spark-worker:   # no container_name: compose names replicas sparkflock-spark-worker-1..N
+<span class="ln">59</span>    image: sparkflock-spark:3.5.6
+<span class="ln">60</span>    profiles: [cluster]
+<span class="ln">61</span>    depends_on: { spark-master: { condition: service_healthy } }
+<span class="ln">62</span>    environment:
+<span class="ln">63</span>      PYSPARK_PYTHON: python3
+<span class="ln">64</span>      # Each app copies the ~280 MB SDK jar into the work dir; without cleanup 60 runs = 15 GB.
+<span class="ln">65</span>      SPARK_WORKER_OPTS: &quot;-Dspark.worker.cleanup.enabled=true -Dspark.worker.cleanup.interval=60 -Dspark.worker.cleanup.appDataTtl=120&quot;
+<span class="ln">66</span>    # Registers by IP: a replica&#x27;s hostname is its container id, which other containers cannot resolve.
+<span class="ln">67</span>    entrypoint: [&quot;sh&quot;, &quot;-c&quot;, &quot;exec /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker --host $$(hostname -i) --cores 2 --memory 2g --work-dir /tmp/spark-work spark://spark-master:7077&quot;]
+</code></pre><p class="note">Workers exist because this service, scaled to N, started them. Nothing in Spark's standalone master creates one.</p></figure>
 <div class="scroll"><table>
 <thead><tr><th>Setup</th><th class="num">Workers alive</th><th class="num">Executors used</th><th class="num">Input pieces</th><th class="num">Batch seconds</th></tr></thead>
 <tbody>
@@ -331,8 +337,10 @@ ul.tight{padding-left:20px;margin:8px 0} ul.tight li{margin:4px 0}
 </tbody></table></div>
 <h3>What broke while building it</h3>
 <ul class="tight">
-<li><b>Packages set in code were ignored</b> under <code>spark-submit</code>; they are now passed on the command line (<figure class="code"><figcaption><span class="ref">scripts/submit.sh:15-16</span></figcaption><pre><code><span class="ln">15</span>exec &quot;$SPARK_HOME/bin/spark-submit&quot; --master &quot;$master&quot; --packages &quot;$PACKAGES&quot; \
-<span class="ln">16</span>  --conf spark.driver.host=127.0.0.1 --conf spark.driver.bindAddress=127.0.0.1 \
+<li><b>Packages set in code were ignored</b> under <code>spark-submit</code>; they are now passed on the command line (<figure class="code"><figcaption><span class="ref">scripts/submit.sh:20-23</span></figcaption><pre><code><span class="ln">20</span>exec &quot;$SPARK_HOME/bin/spark-submit&quot; --master &quot;local[*]&quot; --packages &quot;$PACKAGES&quot; \
+<span class="ln">21</span>  --conf spark.driver.host=127.0.0.1 --conf spark.driver.bindAddress=127.0.0.1 \
+<span class="ln">22</span>  --conf spark.ui.showConsoleProgress=false ${SPARK_SUBMIT_EXTRA:-} \
+<span class="ln">23</span>  &quot;$ROOT/spark/job.py&quot; &quot;$@&quot;
 </code></pre></figure>).</li>
 <li><b>Postgres driver invisible</b> to the JVM's driver manager; it is now loaded through Spark's classloader (<span class="ref">spark/job.py:131</span>).</li>
 <li><b>Empty bucket prefix crashed startup.</b> Fixed (see step 2).</li>

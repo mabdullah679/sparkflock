@@ -28,6 +28,8 @@ HOW TO RUN IT ON YOUR MACHINE
 Open a terminal in this folder.
 
   Step 1   make init          one time: installs Spark into a private folder
+           then open the new .env file and replace the CHANGE_ME values
+           (the storage secret must be at least 8 characters)
   Step 2   make up            starts MinIO + Postgres, creates the bucket
   Step 3   make cluster-up    starts a Spark master and 1 worker, both as
                               docker containers (make cluster-up N=3 for 3)
@@ -129,18 +131,32 @@ STAGING (REAL AWS, FREE CREDITS) - NOT YET TRIED
   5. When done:  terraform destroy   (RDS costs money if left running)
 
 WHERE THINGS ARE
-  spark/job.py            the whole pipeline (one file, ~250 lines)
+  spark/job.py            the whole pipeline (one file, ~300 lines)
   spark/schema.sql        the tables
   scripts/                gen_events.py, submit.sh, standalone.sh, ...
   k8s/                    Dockerfile, rbac.yaml, submit.sh (scaling knobs)
   terraform/              modules/pipeline + envs/local + envs/staging
   tests/                  e2e.sh and k8s_scale.sh (the proofs)
   presentation/           index.html - the walkthrough, with file and line refs
-  README.md               the same project, written for an AI agent
+  README.md               the same project, in the standard layout
+  CLAUDE.md               notes for the AI assistant and maintainers: rules
+                          that must not be broken and mistakes already made
+  .github/workflows/      the automatic checks that run on GitHub (see below)
 
 PORTS USED (chosen not to clash with other projects)
   MinIO 29000 (web console 29001), Postgres 25432, Spark master 27077,
   Spark master web page 28080, dashboard 29090.
+
+AUTOMATIC CHECKS ON GITHUB
+  Every pull request runs: a shell-script lint, a Python syntax check, a
+  check that the line numbers quoted in presentation/index.html still point
+  at the right code, a check that the docker files parse, and a scan for
+  leaked passwords or keys.
+  They do NOT run the end-to-end test (make test). That test needs Docker
+  and about 6 minutes, and it has not been put on GitHub. So a green check
+  on GitHub does not prove the pipeline loads data.
+  Warning: make test (and make reset) ERASE the local test data in MinIO
+  and Postgres.
 
 LIVE TOPOLOGY DASHBOARD (added 2026-10-15)
 
@@ -148,6 +164,11 @@ WHAT IT IS
   A web page that draws your stack as 3D-ish blocks and updates every second:
   bucket -> Spark driver -> worker pods -> database. It is read-only: it can
   look at the pods but cannot create or delete anything.
+
+SAFETY NOTE
+  The dashboard has no login and docker publishes it on all of this
+  computer's network connections, not just this computer. Only run it on a
+  network you trust.
 
 HOW TO OPEN IT
   make topo-up        start it (needs make k8s-start first)
